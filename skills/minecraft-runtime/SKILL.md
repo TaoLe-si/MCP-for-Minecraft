@@ -277,3 +277,48 @@ AutoHotkey、pyautogui、把窗口抢到前台再模拟按键、虚拟 HID 设�
 
 **判据纪律再强调一次**：回包 `ok=true` 只说明包送到了。改动类一律回读
 （丢完看数量、飞完看 altitudes、给完看背包），回读不了的才退而标"弱核对"。
+
+### [2026-10-01 23:34] 运行时修正
+
+**第三/四批 API 运行时核实**（`python tools/e2e_api3.py`，共 10 条）：回读核对 10，弱核对 0，失败 0。
+
+无失败项。
+- 交易那条是重点：原版点交易按钮要三步（`setSelectionHint` + **`tryMoveItems`** + 发 `ServerboundSelectTradePacket`），少第二步付款槽是空的、点结果槽毫无反应。这里用一笔 NBT 写死的交易（1 绿宝石 → 3 面包）验，成交后**背包里真的多了 3 个面包**。
+- 进度那条：单机读服务端权威进度（客户端那份 progress 是私有字段且会被成就界面抢监听器）。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api3`。
+
+### [2026-10-02 00:2x] 运行时修正：第三/四批（交易 / 进度 / 世界设定 / 实体）
+
+**`python tools/e2e_api3.py`：10 条，回读核对 10 条、失败 0。**
+
+| # | 条目 | 回读证据 |
+|---|---|---|
+| D1 | `setWorld`（时间/天气/难度） | `dayTime 6021→18031`、`下雨 False→True`、`难度 peaceful→hard` |
+| E9 | `spawn` | `entities` 里真的多了一只猪 |
+| E10 | `nameTag` | `customName=MCP-PIG`（`entity` 回读） |
+| E11 | `kill` | 猪从列表里消失 |
+| F1/F2 | `advancements` | `story/root` 先 `done=False`，`/advancement grant` 后 `done=True percent=1.0` |
+| G0–G3 | **跟村民交易** | 界面 `MerchantScreen` 开出来 → 读到 `1 绿宝石 → 3 面包` → 成交后**背包里真多了 24 个面包**、8 个绿宝石清零 |
+
+**这轮又挖出三条原版规则，都是"看着像没反应"的那一类：**
+
+1. **交易要三步，少一步就"点了没反应"** ★
+   原版 `MerchantScreen.postButtonClick()`（`:55`）做的是：
+   `menu.setSelectionHint(i)` → **`menu.tryMoveItems(i)`**（把付款物品从背包挪进付款槽）→
+   发 `ServerboundSelectTradePacket(i)`。漏掉中间那步，付款槽是空的，
+   点结果槽什么也不会发生 —— 而且**不报错**。
+2. **成交要用 Shift+左键（`QUICK_MOVE`），不能用 `PICKUP`** ★
+   `PICKUP` 点结果槽是把产物放到**光标上**（carried item），不进背包。
+   实测踩过：日志显示成交、绿宝石从 8 变成 0、**面包一个没进包**（它挂在光标上）。
+   换成 `QUICK_MOVE` 才进背包。另外**一次 QUICK_MOVE 可能成交不止一次**
+   （付款够的话原版会把能换的都换掉，实测一次点击 8 绿宝石→24 面包），
+   所以成交次数要按 `uses` 的增量算。
+3. **村民会游荡，而且没交易就不开界面** ★
+   - `Villager.mobInteract` 里有 `boolean flag = this.getOffers().isEmpty();` ——
+     **没交易就直接 `setUnhappy()` 返回，不开界面**。所以测试必须用 NBT 写死 `Offers`。
+   - 实测第二次跑的时候那只村民已经游荡到 **24 格开外**，interact 根本够不着。
+     测试里要 `{NoAI:1b}` 把它定住 —— 这是"上一轮能过、这一轮过不了"的典型来源。
+4. **进度在联机时读不到**：客户端 `ClientAdvancements.progress` 是私有字段，
+   而且会被成就界面抢走监听器。单机直接读服务端那份权威进度
+   （`ServerAdvancementManager` + `PlayerAdvancements#getOrStartProgress`）；
+   联机如实报"读不到"，不编。

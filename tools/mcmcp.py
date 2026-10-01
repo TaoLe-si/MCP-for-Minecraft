@@ -861,6 +861,57 @@ TOOLS_SPEC = [
       "required": ["action"]},
      lambda a: tool_action(a["action"], a.get("args") or {}, a.get("record", True))),
 
+    # ---------------- 批次3/4：交易、进度、世界设定、实体 ----------------
+    ("mc_trades", "当前交易界面上这个商人能给的所有交易（要价/产物/剩余次数/是否售罄）。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_obs("trades", {})),
+    ("mc_trade", "选一笔交易并成交。原版点交易按钮的三步（选中/挪付款物/告知服务端）都会做。",
+     {"type": "object", "properties": {
+         "index": {"type": "integer", "description": "mc_trades 回的序号，默认 0"},
+         "count": {"type": "integer", "description": "成交几次，默认 1"},
+         "selectOnly": {"type": "boolean", "description": "只选中不成交"}},
+      "required": []},
+     lambda a: tool_action("trade", {k: a[k] for k in ("index", "count", "selectOnly")
+                                     if k in a}, True)),
+    ("mc_advancements", "进度/成就完成情况（单机读服务端权威进度；联机会如实说读不到）。",
+     {"type": "object", "properties": {
+         "filter": {"type": "string", "description": "按 id 或标题过滤"},
+         "done": {"type": "boolean", "description": "只看已完成的"},
+         "limit": {"type": "integer", "description": "默认 60"}}},
+     lambda a: tool_obs("advancements", {k: a[k] for k in ("filter", "done", "limit")
+                                         if k in a})),
+    ("mc_set_world", "改世界设定：时间/天气/难度/游戏模式/出生点。发命令并回读。",
+     {"type": "object", "properties": {
+         "time": {"type": "string", "description": "day / noon / night / 数字 tick"},
+         "weather": {"type": "string", "description": "clear / rain / thunder"},
+         "difficulty": {"type": "string", "description": "peaceful / easy / normal / hard"},
+         "gameMode": {"type": "string", "description": "survival / creative / adventure / spectator"},
+         "spawn": {"type": "string", "description": "x,y,z"}}},
+     lambda a: tool_action("setWorld", {k: a[k] for k in ("time", "weather", "difficulty",
+                                                         "gameMode", "spawn") if k in a}, True)),
+    ("mc_spawn", "生成一个实体（创造模式）。回读用 mc_entities 确认。",
+     {"type": "object", "properties": {
+         "entity": {"type": "string", "description": "如 minecraft:pig；注意 1.20.1 的船是 "
+                                                    "minecraft:boat，木种走 nbt={Type:\"oak\"}"},
+         "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"},
+         "nbt": {"type": "string", "description": "可选 NBT，如 {Type:\"oak\"}"}},
+      "required": ["entity"]},
+     lambda a: tool_action("spawn", {k: a[k] for k in ("entity", "x", "y", "z", "nbt")
+                                     if k in a}, True)),
+    ("mc_kill", "清实体：给 entityId 杀那一个，给 filter（实体类型）按类型清。",
+     {"type": "object", "properties": {
+         "entityId": {"type": "integer"},
+         "filter": {"type": "string", "description": "实体类型，如 minecraft:pig"}}},
+     lambda a: tool_action("kill", {k: a[k] for k in ("entityId", "filter") if k in a}, True)),
+    ("mc_name_tag", "给实体改自定义名（name tag 效果），顺带让它不被自然清除。",
+     {"type": "object", "properties": {
+         "entityId": {"type": "integer"},
+         "name": {"type": "string", "description": "留空则清除名字"},
+         "visible": {"type": "boolean", "description": "是否总显示名字"}},
+      "required": ["entityId"]},
+     lambda a: tool_action("nameTag", {k: a[k] for k in ("entityId", "name", "visible")
+                                       if k in a}, True)),
+
     # ---------------- 工程 ----------------
     ("mc_build", "跑 gradle 构建（默认 build），只回错误行。",
      {"type": "object", "properties": {"target": {"type": "string"}}},

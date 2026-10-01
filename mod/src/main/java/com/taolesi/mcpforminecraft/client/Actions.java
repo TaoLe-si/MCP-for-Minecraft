@@ -1,6 +1,7 @@
 package com.taolesi.mcpforminecraft.client;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -30,8 +31,14 @@ public final class Actions {
     private Actions() {
     }
 
-    /** 对实体右键：喂食、剪毛、挤奶、交易、上船、给盔甲架穿装备…… */
-    static JsonObject useOnEntity(Minecraft mc, JsonObject args) {
+    /**
+     * 对实体右键：喂食、剪毛、挤奶、交易、上船、给盔甲架穿装备……
+     *
+     * <p>{@code awaitScreen=true} 时等界面真的开出来再回包 —— 跟对方块 {@code interact}
+     * 同一个道理：**跟村民交易**要开 `MerchantScreen`，那是服务端回
+     * {@code ClientboundOpenScreenPacket} 才 setScreen 的，回包那一刻界面还没出来。
+     */
+    static void useOnEntity(Minecraft mc, JsonObject args, CompletableFuture<JsonObject> out) {
         LocalPlayer player = InputOverride.requireWorld(mc);
         Entity target = requireEntity(mc, args);
         InteractionHand hand = readHand(args);
@@ -40,7 +47,19 @@ public final class Actions {
         InteractionResult result = mc.gameMode.interact(player, target, hand);
         String type = ForgeRegistries.ENTITY_TYPES.getKey(target.getType()).toString();
         Journal.event("op", "useOnEntity " + type + " → " + result);
-        return Observation.pair(before, Observation.of(mc), entityExtra(target, result, hand));
+        JsonObject extra = entityExtra(target, result, hand);
+
+        boolean await = args.has("awaitScreen") && args.get("awaitScreen").getAsBoolean();
+        if (!await) {
+            out.complete(Observation.pair(before, Observation.of(mc), extra));
+            return;
+        }
+        int budget = Math.max(1, args.has("ticks") ? args.get("ticks").getAsInt() : 40);
+        GameActions.submit(before, extra, budget,
+                m -> m.screen != null,
+                () -> extra.addProperty("screen", mc.screen == null
+                        ? null : mc.screen.getClass().getSimpleName()),
+                out);
     }
 
     /**

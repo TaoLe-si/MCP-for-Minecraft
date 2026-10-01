@@ -45,6 +45,7 @@ public final class Dispatcher {
             "containerButton", "creativeGive", "releaseUsing", "startUsing",
             "pickItem", "drop", "stopBreak", "digStatus", "sleep", "wakeUp",
             "ride", "dismount", "respawn", "fly", "openInventory", "clientLevel",
+            "trades", "trade", "advancements", "setWorld", "spawn", "kill", "nameTag",
             // 朝向
             "look", "lookAt",
             // 世界改动

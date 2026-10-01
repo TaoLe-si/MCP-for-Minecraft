@@ -156,6 +156,30 @@
 
 ---
 
+
+## N. 第三/四批：交易 / 进度 / 世界设定 / 实体（已全部运行时核实）
+
+| # | 能力 | op | 实现 | 静态证据 | 运行时 | 状态 |
+|---|---|---|---|---|---|---|
+| N1 | 列商人的全部交易（要价/产物/次数/售罄） | `trades` | Trade | `MerchantMenu.getOffers() :232` `MerchantOffer.getCostA() :74` | 1 笔 1→3 | 已核 |
+| N2 | 选中并成交（原版三步全做） | `trade` | Trade | `MerchantScreen.postButtonClick() :55` 三步 | 面包 0→24，宝石 8→0 | 已核 |
+| N3 | 容器按钮（附魔等级/切石样式/信标） | `containerButton` | Actions | `handleInventoryButtonClick() :453` | 弱核对 | 已核 |
+| N4 | 进度/成就完成情况 | `advancements` | WorldOps | `PlayerAdvancements.getOrStartProgress() :296` | grant 后 done=True 100% | 已核 |
+| N5 | 改世界：时间/天气/难度/模式/出生点 | `setWorld` | WorldOps | `ServerLevel.setDayTime() :375` + 命令 | dayTime/下雨/难度全变 | 已核 |
+| N6 | 生成实体 | `spawn` | WorldOps | `/summon` + `entities` 回读 | 猪出现 | 已核 |
+| N7 | 清实体 | `kill` | WorldOps | `/kill @e[type=...]` + 回读 | 猪消失 | 已核 |
+| N8 | 给实体命名（name tag） | `nameTag` | WorldOps | `Entity.setCustomName() :2626` | customName=MCP-PIG | 已核 |
+| N9 | 对实体右键并等界面开 | `useOnEntity{awaitScreen}` | Actions | 服务端 `ClientboundOpenScreenPacket` | MerchantScreen 开出 | 已核 |
+
+第三/四批又挖出 4 条原版规则（详见 `skills/minecraft-api/SKILL.md` 第 10 章 N12-N15）：
+
+| # | 规则 | 后果 |
+|---|---|---|
+| N12 | 交易要三步，漏掉 `tryMoveItems` 付款槽是空的 | **点了毫无反应，还不报错** |
+| N13 | 成交要 Shift+左键；`PICKUP` 的产物挂在**光标**上不进背包 | 成交了、钱扣了、货没到手 |
+| N14 | 村民会游荡 + `getOffers().isEmpty()` 就不开界面 | 上一轮能过、这一轮过不了 |
+| N15 | 客户端 `ClientAdvancements.progress` 是私有的 | 联机读不到进度，如实上报 |
+
 ## 未覆盖 / 明确不做（写在明处，别装作覆盖了）
 
 | 项 | 原因 |
@@ -169,12 +193,15 @@
 
 ## 覆盖统计
 
-- 已核（静+运）：**57** 条（其中 6 条是"弱核对"：只确认请求发出、结果由服务端裁决）
+- 已核（静+运）：**67** 条（其中 7 条是弱核对：只确认请求发出、结果由服务端裁决）
 - 已核静态（待运行时核实）：**0** 条
 - 未实现：**0** 条（本表登记的都在代码里了）
 
 第二轮（观测纵深 + 动作纵深）的运行时核实：`python tools/e2e_api2.py` —— **30 条，
 25 条回读核对通过、5 条弱核对、0 失败**。原始记录见 `measurements.jsonl` 的 `kind=e2e_api2`。
+
+第三/四批（交易 / 进度 / 世界设定 / 实体）：`python tools/e2e_api3.py` —— **10 条，
+10 条回读核对通过、0 失败**。原始记录见 `kind=e2e_api3`。
 
 ### 第二轮挖出来的原版规则（详见 `skills/minecraft-api/SKILL.md` 第 10 章）
 

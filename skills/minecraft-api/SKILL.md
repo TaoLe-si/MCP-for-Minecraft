@@ -302,6 +302,51 @@ if (this.onGround() && this.getAbilities().flying && !this.minecraft.gameMode.is
 
 ---
 
+### N12. 交易要三步，少一步就"点了没反应" ★
+
+原版 `MerchantScreen#postButtonClick()`（`MerchantScreen:55`）：
+
+```java
+this.menu.setSelectionHint(this.shopItem);                        // 1. 本地选中第几个
+this.menu.tryMoveItems(this.shopItem);                            // 2. 把付款物品挪进付款槽
+this.minecraft.getConnection().send(new ServerboundSelectTradePacket(this.shopItem)); // 3. 告知服务端
+```
+
+**漏掉第 2 步，付款槽是空的，点结果槽什么也不会发生，而且不报错。**
+`handleInventoryMouseClick` 那条路完全看不出问题 —— 这是最难查的一类。
+
+### N13. 成交要用 Shift+左键，`PICKUP` 的产物在光标上 ★
+
+- `ClickType.PICKUP` 点结果槽（`MerchantMenu` 里索引 **2**）是把产物放到
+  **光标（carried item）**上，不进背包。实测：日志显示成交、8 个绿宝石清零、
+  **面包一个没进包** —— 因为它挂在光标上。
+- 用 `ClickType.QUICK_MOVE`（Shift+左键）才直接进背包（服务端
+  `MerchantMenu.quickMoveStack` 里针对结果槽走的就是成交那条路）。
+- 而且**一次 `QUICK_MOVE` 可能成交不止一次**：付款物品够的话原版会把能换的都换掉。
+  实测一次点击把 8 个绿宝石全换成 24 个面包。所以成交次数要按
+  `MerchantOffer#getUses()` 的增量算，不能按"点了几次"算。
+- `MerchantMenu#tryMoveItems` 挪的是**整叠**（不是只挪一份），所以付款槽可能还剩下东西；
+  关界面时原版会还回背包（`MerchantMenu#removed`）。`trade` op 会把这个剩余如实报出来。
+
+### N14. 村民：会游荡，而且没交易就不开界面 ★
+
+- `Villager#mobInteract` 里 `boolean flag = this.getOffers().isEmpty();`
+  —— **没有交易就直接 `setUnhappy()` 返回，不开界面**。所以测试要开交易界面，
+  必须让村民有交易（NBT 写死 `Offers:{Recipes:[...]}` 最省事；
+  `MerchantOffer` 的键是 `buy`/`sell`/`buyB`/`uses`/`maxUses`/`rewardExp`/`xp`/`priceMultiplier`）。
+- **村民会游荡**：实测第二次跑的时候那只已经走开 **24 格**，`useOnEntity` 根本够不着。
+  要它待着不动就 `{NoAI:1b}`。
+- 顺带：`useOnEntity` 也支持 `awaitScreen` —— 交易界面同样是服务端回
+  `ClientboundOpenScreenPacket` 才开的。
+
+### N15. 进度：联机读不到权威值
+
+客户端 `ClientAdvancements.progress` 是**私有字段**，而且会被成就界面通过
+`setListener()` 抢走监听器，自己维护副本既绕又不可靠。单机下服务端对象就在同一进程里，
+直接读 `MinecraftServer#getAdvancements()`（`ServerAdvancementManager`）+
+`ServerPlayer#getAdvancements()`（`PlayerAdvancements#getOrStartProgress`）。
+联机拿不到服务端对象时**如实报"读不到"，不编**。
+
 ## 11. 证据来源
 
 - 反编译产物：`mod/build/moddev/artifacts/forge-1.20.1-47.4.10-sources.jar`

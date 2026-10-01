@@ -41,7 +41,7 @@ public final class ClientOps {
                     case "recipes" -> out.complete(Info.recipes(mc, args));
                     case "recipebook" -> out.complete(Info.recipeBook(mc));
                     // ---- 批次2：动作纵深 ----
-                    case "useOnEntity" -> out.complete(Actions.useOnEntity(mc, args));
+                    case "useOnEntity" -> Actions.useOnEntity(mc, args, out);
                     case "useOnEntityAt" -> out.complete(Actions.useOnEntityAt(mc, args));
                     case "placeRecipe" -> out.complete(Actions.placeRecipe(mc, args));
                     case "recipeOptions" -> out.complete(Actions.recipeOptions(mc, args));
@@ -61,6 +61,14 @@ public final class ClientOps {
                     case "fly" -> out.complete(Actions.fly(mc, args));
                     case "openInventory" -> out.complete(Actions.openInventory(mc, args));
                     case "clientLevel" -> out.complete(Actions.clientLevel(mc));
+                    // ---- 批次3/4：交易、进度、世界设定、实体 ----
+                    case "trades" -> out.complete(Trade.trades(mc, args));
+                    case "trade" -> out.complete(Trade.trade(mc, args));
+                    case "advancements" -> out.complete(WorldOps.advancements(mc, args));
+                    case "setWorld" -> out.complete(WorldOps.setWorld(mc, args));
+                    case "spawn" -> out.complete(WorldOps.spawn(mc, args));
+                    case "kill" -> out.complete(WorldOps.kill(mc, args));
+                    case "nameTag" -> out.complete(WorldOps.nameTag(mc, args));
                     case "block" -> out.complete(Blocks.block(mc, args));
                     case "blocks" -> out.complete(Blocks.blocks(mc, args));
                     case "entities" -> out.complete(Blocks.entities(mc, args));
