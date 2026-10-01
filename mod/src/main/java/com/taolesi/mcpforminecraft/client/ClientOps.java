@@ -30,6 +30,37 @@ public final class ClientOps {
                     // ---- 观测 ----
                     case "state" -> out.complete(Observation.of(mc));
                     case "probe" -> out.complete(Probe.of(mc));
+                    case "vitals" -> out.complete(Info.vitals(mc));
+                    case "world" -> out.complete(Info.world(mc));
+                    case "light" -> out.complete(Info.light(mc, args));
+                    case "biome" -> out.complete(Info.biome(mc, args));
+                    case "blockentity" -> out.complete(Info.blockEntity(mc, args));
+                    case "entity" -> out.complete(Info.entity(mc, args));
+                    case "scoreboard" -> out.complete(Info.scoreboard(mc));
+                    case "server" -> out.complete(Info.server(mc));
+                    case "recipes" -> out.complete(Info.recipes(mc, args));
+                    case "recipebook" -> out.complete(Info.recipeBook(mc));
+                    // ---- 批次2：动作纵深 ----
+                    case "useOnEntity" -> out.complete(Actions.useOnEntity(mc, args));
+                    case "useOnEntityAt" -> out.complete(Actions.useOnEntityAt(mc, args));
+                    case "placeRecipe" -> out.complete(Actions.placeRecipe(mc, args));
+                    case "recipeOptions" -> out.complete(Actions.recipeOptions(mc, args));
+                    case "containerButton" -> out.complete(Actions.containerButton(mc, args));
+                    case "creativeGive" -> out.complete(Actions.creativeGive(mc, args));
+                    case "releaseUsing" -> out.complete(Actions.releaseUsing(mc, args));
+                    case "startUsing" -> out.complete(Actions.startUsing(mc, args));
+                    case "pickItem" -> out.complete(Actions.pickItem(mc, args));
+                    case "drop" -> out.complete(Actions.drop(mc, args));
+                    case "stopBreak" -> out.complete(Actions.stopBreak(mc, args));
+                    case "digStatus" -> out.complete(Actions.digStatus(mc));
+                    case "sleep" -> out.complete(Actions.sleep(mc, args));
+                    case "wakeUp" -> out.complete(Actions.wakeUp(mc, args));
+                    case "ride" -> out.complete(Actions.ride(mc, args));
+                    case "dismount" -> out.complete(Actions.dismount(mc, args));
+                    case "respawn" -> out.complete(Actions.respawn(mc, args));
+                    case "fly" -> out.complete(Actions.fly(mc, args));
+                    case "openInventory" -> out.complete(Actions.openInventory(mc, args));
+                    case "clientLevel" -> out.complete(Actions.clientLevel(mc));
                     case "block" -> out.complete(Blocks.block(mc, args));
                     case "blocks" -> out.complete(Blocks.blocks(mc, args));
                     case "entities" -> out.complete(Blocks.entities(mc, args));

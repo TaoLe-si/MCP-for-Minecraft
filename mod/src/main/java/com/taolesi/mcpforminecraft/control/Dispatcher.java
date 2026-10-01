@@ -39,6 +39,12 @@ public final class Dispatcher {
     private static final Set<String> CLIENT_OPS = Set.of(
             // 观测
             "state", "probe", "block", "blocks", "entities", "inventory", "ray", "screen",
+            "vitals", "world", "light", "biome", "blockentity", "entity", "scoreboard",
+            "server", "recipes", "recipebook",
+            "useOnEntity", "useOnEntityAt", "placeRecipe", "recipeOptions",
+            "containerButton", "creativeGive", "releaseUsing", "startUsing",
+            "pickItem", "drop", "stopBreak", "digStatus", "sleep", "wakeUp",
+            "ride", "dismount", "respawn", "fly", "openInventory", "clientLevel",
             // 朝向
             "look", "lookAt",
             // 世界改动

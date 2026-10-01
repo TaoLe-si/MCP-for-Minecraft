@@ -197,3 +197,83 @@ AutoHotkey、pyautogui、把窗口抢到前台再模拟按键、虚拟 HID 设�
 - 起点 `(0.5, -60, 0.5)` → 终点 `(0.5, -60, 8.8748)`，位移 **8.375 格**，
   40 tick，**4.187 格/秒**，前后截图变化 **24.70%**。
 - 跟 17:47 那次（8.3748 格）**一位不差** —— 可复现。
+
+### [2026-10-01 23:11] 运行时修正
+
+**第二批 API 运行时核实**（`python tools/e2e_api2.py`，共 28 条）：回读核对过 19 条，弱核对 5 条，失败 4 条。
+
+失败项：drop 之后那一叠少了 1 个（回读核对）、startUsing 后 using=True、releaseUsing 回读到 wasUsing=True、pickItem 把石头拿到手上（回读核对）
+- 回读核对的含义：不是『没报错就算过』，而是**改完之后再读一次状态**
+  （drop 后看背包、fly 后看 abilities、sleep 后看 problem、creativeGive 后看背包里是不是真有 8 个红石）。
+- 弱核对的那几条是『客户端只管发请求、结果由服务端裁决』的（placeRecipe/recipebook 等），
+  回包只代表请求已发出，所以不敢标硬证据。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api2`。
+
+### [2026-10-01 23:12] 运行时修正
+
+**第二批 API 运行时核实**（`python tools/e2e_api2.py`，共 29 条）：回读核对过 18 条，弱核对 5 条，失败 6 条。
+
+失败项：fly 之后 abilities.flying 变了（回读核对）、找到面包所在的快捷栏格、drop 之后那一叠少了 1 个（回读核对）、startUsing 后 using=True、releaseUsing 回读到 wasUsing=True、pickItem 之后手上变成石头（回读核对）
+- 回读核对的含义：不是『没报错就算过』，而是**改完之后再读一次状态**
+  （drop 后看背包、fly 后看 abilities、sleep 后看 problem、creativeGive 后看背包里是不是真有 8 个红石）。
+- 弱核对的那几条是『客户端只管发请求、结果由服务端裁决』的（placeRecipe/recipebook 等），
+  回包只代表请求已发出，所以不敢标硬证据。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api2`。
+
+### [2026-10-01 23:13] 运行时修正
+
+**第二批 API 运行时核实**（`python tools/e2e_api2.py`，共 30 条）：回读核对过 23 条，弱核对 5 条，失败 2 条。
+
+失败项：fly 之后 abilities.flying 变了（回读核对）、pickItem 之后手上变成石头（回读核对）
+- 回读核对的含义：不是『没报错就算过』，而是**改完之后再读一次状态**
+  （drop 后看背包、fly 后看 abilities、sleep 后看 problem、creativeGive 后看背包里是不是真有 8 个红石）。
+- 弱核对的那几条是『客户端只管发请求、结果由服务端裁决』的（placeRecipe/recipebook 等），
+  回包只代表请求已发出，所以不敢标硬证据。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api2`。
+
+### [2026-10-01 23:19] 运行时修正
+
+**第二批 API 运行时核实**（`python tools/e2e_api2.py`，共 30 条）：回读核对过 25 条，弱核对 5 条，失败 0 条。
+
+无失败项。
+- 回读核对的含义：不是『没报错就算过』，而是**改完之后再读一次状态**
+  （drop 后看背包、fly 后看 abilities、sleep 后看 problem、creativeGive 后看背包里是不是真有 8 个红石）。
+- 弱核对的那几条是『客户端只管发请求、结果由服务端裁决』的（placeRecipe/recipebook 等），
+  回包只代表请求已发出，所以不敢标硬证据。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api2`。
+
+### [2026-10-01 23:5x] 运行时修正：第二批 API（观测纵深 + 动作纵深）
+
+**`python tools/e2e_api2.py`：30 条，回读核对通过 25 条、弱核对 5 条、失败 0。**
+
+新核实通过的（都做了**回读**，不是"没报错就算过"）：
+
+| 组 | 条目 | 回读证据 |
+|---|---|---|
+| 观测 | vitals / world / light / biome / blockentity / entity / scoreboard / server / recipes | 告示牌文本 `MCP-SIGN`、箱子里开界面读到金锭 x7、计分板 42 分、钻石剑配方含 3 个原料 |
+| 身体 | fly / ride / dismount / sleep / startUsing / releaseUsing | `flying=True 离地=True`、载具 boat 上下、`sleeping=True`、`using=True` |
+| 手上 | drop / pickItem | 面包 8→7、中键选取后手持变石头 |
+| 实体 | useOnEntity / useOnEntityAt | 对猪右键返回 PASS |
+| 容器 | creativeGive / placeRecipe / recipeOptions / containerButton | 背包里真的有红石 x8 |
+| 界面 | openInventory | 界面真的开了（`CreativeModeInventoryScreen`） |
+
+**这轮最有价值的产出是 10 条"原版规则"**（详见 `skills/minecraft-api/SKILL.md` 第 10 章），
+每一条都是"我先做错了 → 被运行时打脸 → 回源码找到真相"：
+
+1. **中键选取不是 `handlePickItem`** —— 那是"把背包第 N 格挪到手上"；真逻辑在私有的
+   `Minecraft.pickBlock()`（`:2231`）里，只能照抄它的三步。按错语义实现的那版点了毫无反应。
+2. **站在地上飞行会被取消**（`LocalPlayer:784`）—— `flying=true` 会在 1.5 秒内自己变回 false。
+   现在 `fly` 默认顺手给一点向上速度离地，实测能保持住。
+3. **客户端那份计分板在单机下是空的** —— 服务端日志说 `Created new objective`，
+   客户端读是 0；读服务端那份才有（2 个目标 / 42 分）。`scoreboard` op 现在两份都回并标 `source`。
+4. **读方块实体要用 `saveWithoutMetadata()`**，`getUpdateTag()` 基类直接返空 tag。
+5. **容器内容不同步给没开界面的客户端** —— 读箱子得到 `{Items:[]}` 是原版设计，不是缺陷。
+6. **1.20.1 的船叫 `minecraft:boat`**（木种走 `{Type:"oak"}`），没有 `oak_boat`。
+7. **命令的结果只能用 `chatlog` 看** —— 三次定位（船名/计分板/箱子）都是靠服务端回的聊天原话。
+8. **状态跨跑累积**：上一轮睡在床上，这一轮 `fly`/`startUsing` 全都悄悄不生效。
+   所以有了 `reset_test_state()`。
+9. **`drop` 改的是数量不是物品名**。
+10. **服务端裁决的结果不能当场读**：`pickItem` 当场读是 `air`、隔一拍才是 `stone`。
+
+**判据纪律再强调一次**：回包 `ok=true` 只说明包送到了。改动类一律回读
+（丢完看数量、飞完看 altitudes、给完看背包），回读不了的才退而标"弱核对"。

@@ -171,7 +171,138 @@ public void setDown(boolean p) {
    再看 `state.screen` 是不是开着界面，最后才怀疑按键逻辑。
 4. **超时不等于失败**：`break` 到 400 tick 上限会如实回报，不会谎报成功。
 
-## 10. 证据来源
+## 10. 原版规则：读源码 + 跑实测双向核实的那些坑
+
+这一节是**第二轮**的产出。每一条都是"先说错 → 被运行时打脸 → 回源码找到真相"，
+所以格外值得记 —— 它们都是**看着像 bug、其实是原版行为**或者**我理解错了 API 语义**的类型。
+
+### N1. 中键"选取方块"不是 `handlePickItem` ★
+
+- `MultiPlayerGameMode.handlePickItem(int slot)`（`:518`）的语义是
+  **"把背包第 slot 格挪到手上"** —— 服务端 `ServerGamePacketListenerImpl:607` 收到后
+  调的是 `inventory.pickSlot(slot)`，跟"准星指着什么"毫无关系。
+- 真正的"中键选取"逻辑写在 `Minecraft.pickBlock()` 里，而它是 **private**（`Minecraft:2231`）。
+  想用只能照抄它的步骤：
+  1. 从准星命中结果取方块：Forge 的
+     `IForgeBlockState#getCloneItemStack(HitResult, BlockGetter, BlockPos, Player)`
+     （在 `net/minecraftforge/common/extensions/IForgeBlockState.java:223`）；
+  2. **创造模式**：`inventory.setPickedItem(stack)` → 再
+     `handleCreativeModeItemAdd(手持, 36 + selected)`。那个 **36** 是服务端那边快捷栏的起始槽号；
+  3. **生存模式**：`inventory.findSlotMatchingItem(stack)` 找到同一个物品 ——
+     在快捷栏里就直接 `inventory.selected = i`，否则 `handlePickItem(i)` 把它换上来。
+- 实测：按上面重写后，`pickItem` 一次点中（`方式=creative，回读手持=minecraft:stone`）。
+  之前那版传了个 selected 槽进去，什么都没发生。
+
+### N2. 站在地上飞行会被原版取消 ★
+
+`LocalPlayer:784`：
+
+```java
+super.aiStep();
+if (this.onGround() && this.getAbilities().flying && !this.minecraft.gameMode.isAlwaysFlying()) {
+    this.getAbilities().flying = false;
+    this.onUpdateAbilities();
+}
+```
+
+- 实测：`fly{on:true}` 之后**当场读是 True，1.5 秒后变回 False**。
+- 所以"开飞行"必须**同时离地**，否则下一 tick 就被抹掉。`fly` op 现在默认顺手给一点向上的
+  速度（`lift`，可关），实测 `flying=True 离地=True` 保持住了。
+- 顺带：`Player.onUpdateAbilities()` 是个**空方法**（`Player:1732`），真正发包的是
+  `LocalPlayer:335`（重写过，发 `ServerboundPlayerAbilitiesPacket`）和 `ServerPlayer:1230`。
+  所以客户端侧调 `player.onUpdateAbilities()` 是对的 —— 但要看是哪一边的 `player`。
+
+### N3. 客户端那份计分板在单机下是空的 ★
+
+- 实测硬证据：服务端日志明明回了 `Created new objective [mcp]`、`Set [mcp] for Dev to 42`，
+  但读 `ClientLevel.getScoreboard()` 得到 **0 个目标**；同一时刻读
+  `MinecraftServer.getScoreboard()`（`ServerScoreboard`）得到 **2 个目标、分数 42**。
+- 代码路径上 `ClientPacketListener.handleAddObjective`（`:2072` 一带）写的确实是
+  `this.level.getScoreboard()`，且 `ClientPacketListener:404` 就是
+  `this.minecraft.setLevel(this.level)` —— 两边是同一个 `ClientLevel` 实例
+  （`identityHashCode` 一致）。**但那份里就是没有数据。**
+- 结论对使用者只关心一件事：**单机时想读计分板，读服务端那份。**
+  `scoreboard` op 现在两份都回，并带 `source` 字段标明哪个有数据。
+
+### N4. 读方块实体要用 `saveWithoutMetadata()`，不是 `getUpdateTag()` ★
+
+- `BlockEntity.getUpdateTag()` 的基类实现（`BlockEntity:163`）是
+  `return new CompoundTag();` —— **直接给个空 tag**。只有少数几类自己覆写了
+  （`BrushableBlockEntity:199`、`CampfireBlockEntity:142`、`DecoratedPotBlockEntity:43`、
+  `ConduitBlockEntity:74`、`JigsawBlockEntity:101`、`SpawnerBlockEntity:61`、
+  `StructureBlockEntity:141`）。
+- 该用的是 `BlockEntity.saveWithoutMetadata()`（`BlockEntity:75`，`public final`），它会调
+  `saveAdditional`。换过来之后告示牌文本读到了（`front_text` 里的 `MCP-SIGN`）。
+
+### N5. 容器内容**不会**同步给没开界面的客户端 ★
+
+- 实测：往箱子里 `/item replace block … container.0 with minecraft:gold_ingot 7`，
+  服务端回了 `Replaced a slot at … with [Gold Ingot]`；
+  但 `blockentity` 读那口箱子得到 `{Items:[]}` —— **本地这份方块实体里根本没东西**。
+- 这不是缺陷，是原版设计：容器物品走"开界面 → 菜单 slots"那条路同步。
+- 所以想读箱子/熔炉里有什么：**`mc_open`（interact + awaitScreen）把界面开出来，
+  再读 `mc_screen` 的 slots**。实测这样能读到那 7 个金锭。
+- 换个角度说：`blockentity` 适合读**方块实体自己的状态**（告示牌的文本、熔炉的火、
+  营火上的东西），不适合读容器内容。
+
+### N6. 1.20.1 的船叫 `minecraft:boat`，不叫 `oak_boat`
+
+- `EntityType:177`：`register("boat", …)`。木种走 NBT：`{Type:"oak"}`。
+- `oak_boat` 是 1.21.3 之后才拆出来的。凭记忆写会得到服务端的
+  `Can't find element 'minecraft:oak_boat' of type 'minecraft:entity_type'`。
+- **教训**：这类"名字记不准"的错误，静态读一遍 `EntityType` 就能避免；
+  幸好在测试里用 `chatlog` 抓到了服务端的原话。
+
+### N7. 命令的结果只能用 `chatlog` 看
+
+`/setblock`、`/summon`、`/give`、`/scoreboard` 这类命令，无论成功失败，**回包都是
+客户端本地立刻构造的**（`sendCommand` 只负责把包发出去），真相在服务端回的
+系统聊天里。所以：
+
+- 命令发完立刻读世界状态**可能读到旧值**（要轮询，见 M8）；
+- 命令**失败**只有 `chatlog` 会告诉你（`Can't find element …`、`No blocks were filled`）。
+- 这一条在排查 N6/N3/N5 时救了命 —— 三次都是靠 `chatlog` 里服务端的原话定位的。
+
+### N8. 状态会跨跑累积，跑批前必须重置 ★
+
+同一个世界连着跑几轮，会积累出**看起来像功能坏了**的现象：
+
+| 累积物 | 表现 | 
+|---|---|
+| 上一轮睡眠测试把人留在床上 | 这一轮 `fly` / `startUsing` **全都悄悄不生效**（原版对睡眠中的玩家忽略很多动作） |
+| 上一轮 `/give` 的物品还在背包里 | 这一轮"丢一个"数字对不上（因为它不在被选中的那一格） |
+| 上一轮放的石头留在脚边 | 这一轮"往前走"位移只有一半或零（撞墙） |
+| 上一轮开着的界面 | 这一轮所有按键类 op 被 `requirePlayable` 直接拒掉 |
+
+所以有了 `tools/mcmcp.py` 的 `reset_test_state()`：**先醒来 → 回固定起点 → 清背包 →
+定模式 → 重新发物品 → 原地清走廊**，一步都不能省。
+
+### N9. `drop` 改的是数量，不是物品名
+
+`LocalPlayer.drop(boolean)`（`:279`）= `getInventory().removeFromSelected(all)` + 发
+`ServerboundPlayerActionPacket`。所以从一个 8 个的叠里丢 1 个，**物品名不变、数量变**。
+判据要比数量（实测 8 → 7 才对得上）。
+
+### N10. 两次"读早了"
+
+两条都是同一类毛病：**服务端裁决的结果不能当场读**。
+
+| op | 当场读到的 | 隔一拍读到的 |
+|---|---|---|
+| `pickItem`（创造） | `minecraft:air` | `minecraft:stone` |
+| `placeRecipe` / `containerButton` / `creativeGive` | 请求已发 | 下一拍才出现在槽里 |
+
+规律重申（跟第 3 节同一件事）：**客户端自己算的（走路/按键/界面树）回包即生效；
+服务端裁决的（开界面/命令/选取/配方）要等下一拍。**
+
+### N11. `light` 的遮挡判据
+
+把石头盖在头顶再读 `light`：`sky` 从 15 掉到 14（地表白天本来就是满天光，
+盖一格只能掉一点）。**判据用"变没变小"，不要写死期望值** —— 期望值随高度/维度/时间变化。
+
+---
+
+## 11. 证据来源
 
 - 反编译产物：`mod/build/moddev/artifacts/forge-1.20.1-47.4.10-sources.jar`
   （ModDevGradle 用 NeoForm 流水线生成，解开在 `mod/build/mcsrc/`，已 gitignore）

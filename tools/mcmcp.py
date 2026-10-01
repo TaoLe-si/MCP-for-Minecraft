@@ -274,6 +274,41 @@ def prepare_clean_lane(length=16, wait=6.0):
     return px, py, pz
 
 
+def reset_test_state(items=(), spawn=(0, -60, 0), wait=3.0):
+    """跑批之前把角色状态收拾干净，保证每一轮从同一个起点开始。
+
+    为什么非做不可 —— 状态会**跨跑累积**，而且累积出来的坑很难认：
+      * 上一轮做睡眠测试把人**留在床上**了，这一轮的 `fly`/`startUsing` 全都悄悄不生效；
+      * 上一轮 `/give` 的面包还在主背包里，这一轮"丢一个"数来数去数字对不上；
+      * 上一轮挖的坑、放的石头留在原地，这一轮"往前走"撞墙；
+      * 上一轮开着的界面还开着，这一轮所有按键类动作直接被拒。
+    所以：**先醒来 → 回固定起点 → 清背包 → 定模式 → 重新发物品**，一步都不能省。
+    """
+    # 1) 先醒来：睡着的时候很多动作会被原版默默忽略
+    try:
+        send_packet("wakeUp", timeout=15)
+    except ControlError:
+        pass
+    # 2) 回固定起点（目标区块在加载时就已生成，不会触发大规模地形生成）
+    send_packet("chat", {"text": "/tp @s %d %d %d 0 0" % spawn, "command": True})
+    time.sleep(0.6)
+    # 3) 清背包、定模式
+    send_packet("chat", {"text": "/clear @s", "command": True})
+    send_packet("chat", {"text": "/gamemode creative", "command": True})
+    time.sleep(0.6)
+    # 4) 重新发物品
+    for item in items:
+        send_packet("chat", {"text": "/give @s %s" % item, "command": True})
+    # 5) 走廊清空（原地，不传送）
+    prepare_clean_lane()
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        if not send_packet("state").get("sleeping"):
+            break
+        time.sleep(0.2)
+    return send_packet("state")
+
+
 def tool_build(target=""):
     cmd = [GRADLEW, target or "build", "--console=plain"]
     p = subprocess.run(cmd, cwd=MOD_DIR, capture_output=True, text=True,
@@ -742,6 +777,89 @@ TOOLS_SPEC = [
       "required": ["op"]},
      lambda a: json.dumps(send_packet(a["op"], a.get("args") or {}), ensure_ascii=False,
                           indent=2)),
+
+    # ---------------- 观测纵深（第二批） ----------------
+    ("mc_vitals", "生存纵深：血量/饱食/饱和/护甲/氧气/经验/药水效果/能力/飞行/着火/入水/睡眠/载具。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_obs("vitals", {})),
+    ("mc_world", "世界：时间/昼夜/天气/难度/维度/世界边界。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_obs("world", {})),
+    ("mc_light", "某坐标的光照：总亮度 / 天光 / 方块光。",
+     {"type": "object", "properties": {
+         "x": {"type": "integer"}, "y": {"type": "integer"}, "z": {"type": "integer"}},
+      "required": ["x", "y", "z"]},
+     lambda a: tool_obs("light", {"x": a["x"], "y": a["y"], "z": a["z"]})),
+    ("mc_biome", "某坐标的生物群系。",
+     {"type": "object", "properties": {
+         "x": {"type": "integer"}, "y": {"type": "integer"}, "z": {"type": "integer"}},
+      "required": ["x", "y", "z"]},
+     lambda a: tool_obs("biome", {"x": a["x"], "y": a["y"], "z": a["z"]})),
+    ("mc_block_entity", "方块实体里的数据（箱子装了什么、熔炉烧到哪、告示牌写了什么），回 NBT 文本。",
+     {"type": "object", "properties": {
+         "x": {"type": "integer"}, "y": {"type": "integer"}, "z": {"type": "integer"}},
+      "required": ["x", "y", "z"]},
+     lambda a: tool_obs("blockentity", {"x": a["x"], "y": a["y"], "z": a["z"]})),
+    ("mc_entity_info", "单个实体的全部：类型/名字/坐标/朝向/血量/效果/骑乘关系 + 完整 NBT。",
+     {"type": "object", "properties": {
+         "entityId": {"type": "integer", "description": "mc_entities 回的 id"}},
+      "required": ["entityId"]},
+     lambda a: tool_obs("entity", {"entityId": a["entityId"]})),
+    ("mc_scoreboard", "计分板：目标、队伍成员、分数。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_obs("scoreboard", {})),
+    ("mc_server", "连接信息：单机还是联机、地址、在线玩家与各自延迟/游戏模式。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_obs("server", {})),
+    ("mc_recipes", "查配方（产物 + 原料 + 配方类型）。filter 可按产物名/配方 id 过滤。",
+     {"type": "object", "properties": {
+         "filter": {"type": "string", "description": "产物物品名或配方 id 的子串，如 torch"},
+         "station": {"type": "string", "description": "配方类型子串，如 crafting / smelting"},
+         "limit": {"type": "integer", "description": "最多回多少，默认 40"}}},
+     lambda a: tool_obs("recipes", {k: a[k] for k in ("filter", "station", "limit") if k in a})),
+    ("mc_recipe_book", "配方书状态：分几组、认了多少、现在哪些做得出来。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_obs("recipebook", {})),
+
+    # ---------------- 动作纵深（第二批） ----------------
+    ("mc_use_on_entity", "对实体右键：喂食、剪毛、挤奶、交易、上船、给盔甲架穿装备。",
+     {"type": "object", "properties": {
+         "entityId": {"type": "integer"},
+         "hand": {"type": "string", "description": "main（默认）/ off"},
+         "at": {"type": "boolean", "description": "true = 在实体包围盒中心精确点（盔甲架/展示框）"},
+         "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"},
+         "record": {"type": "boolean"}},
+      "required": ["entityId"]},
+     lambda a: tool_action("useOnEntityAt" if a.get("at") else "useOnEntity",
+                           {k: a[k] for k in ("entityId", "hand", "x", "y", "z") if k in a},
+                           a.get("record", True))),
+    ("mc_place_recipe", "配方书一键合成（就像在配方书里点一下）。需要先开着合成界面。",
+     {"type": "object", "properties": {
+         "recipeId": {"type": "string", "description": "精确配方 id"},
+         "result": {"type": "string", "description": "按产物物品名子串找第一个"},
+         "index": {"type": "integer", "description": "mc_act{action:recipeOptions} 回的序号"},
+         "all": {"type": "boolean", "description": "尽量多做几份，默认 true"}}},
+     lambda a: tool_action("placeRecipe",
+                           {k: a[k] for k in ("recipeId", "result", "index", "all") if k in a},
+                           True)),
+    ("mc_creative_give", "创造模式拿物品到手（放进指定槽位；不消耗）。",
+     {"type": "object", "properties": {
+         "item": {"type": "string", "description": "如 minecraft:stone 或 stone"},
+         "count": {"type": "integer"}, "slot": {"type": "integer"},
+         "record": {"type": "boolean"}},
+      "required": ["item"]},
+     lambda a: tool_action("creativeGive", {k: a[k] for k in ("item", "count", "slot") if k in a},
+                           a.get("record", True))),
+    ("mc_act", "长尾动作统一入口。action 取值见 skills/minecraft-api/SKILL.md 的『长尾动作』表。",
+     {"type": "object", "properties": {
+         "action": {"type": "string", "description":
+                    "digStatus / drop / pickItem / startUsing / releaseUsing / stopBreak / "
+                    "sleep / wakeUp / respawn / fly / ride / dismount / openInventory / "
+                    "clientLevel / recipeOptions / containerButton"},
+         "args": {"type": "object", "description": "该动作的参数，如 {\"all\":true}"},
+         "record": {"type": "boolean"}},
+      "required": ["action"]},
+     lambda a: tool_action(a["action"], a.get("args") or {}, a.get("record", True))),
 
     # ---------------- 工程 ----------------
     ("mc_build", "跑 gradle 构建（默认 build），只回错误行。",
