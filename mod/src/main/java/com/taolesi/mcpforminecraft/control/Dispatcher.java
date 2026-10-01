@@ -46,6 +46,7 @@ public final class Dispatcher {
             "pickItem", "drop", "stopBreak", "digStatus", "sleep", "wakeUp",
             "ride", "dismount", "respawn", "fly", "openInventory", "clientLevel",
             "trades", "trade", "advancements", "setWorld", "spawn", "kill", "nameTag",
+            "stats", "sounds", "bossBars",
             // 朝向
             "look", "lookAt",
             // 世界改动
@@ -59,7 +60,7 @@ public final class Dispatcher {
 
     /** 这些 op 要占着时间走完，回包晚 —— 超时得按 ticks 放宽。 */
     private static final Set<String> TIMED_OPS =
-            Set.of("key", "move", "jump", "press", "break");
+            Set.of("key", "move", "jump", "press", "break", "stats");
 
     private Dispatcher() {
     }

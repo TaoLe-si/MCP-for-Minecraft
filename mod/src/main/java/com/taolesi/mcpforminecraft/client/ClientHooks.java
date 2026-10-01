@@ -32,6 +32,8 @@ public final class ClientHooks {
         MinecraftForge.EVENT_BUS.addListener(ClientHooks::onClientTick);
         // 聊天/死亡/换维度 → 流水账（events / chatlog 两个 op 的数据源）
         MinecraftForge.EVENT_BUS.register(ClientEvents.class);
+        // 声音 / 首领条 → 感官缓冲（sounds / bossBars 两个 op 的数据源）
+        MinecraftForge.EVENT_BUS.register(Senses.class);
         AutoWorld.init();
     }
 

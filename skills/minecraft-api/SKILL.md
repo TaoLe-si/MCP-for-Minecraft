@@ -347,6 +347,77 @@ this.minecraft.getConnection().send(new ServerboundSelectTradePacket(this.shopIt
 `ServerPlayer#getAdvancements()`（`PlayerAdvancements#getOrStartProgress`）。
 联机拿不到服务端对象时**如实报"读不到"，不编**。
 
+### N16. 事件回调抛异常 = 整个游戏崩掉 ★★
+
+这是最贵的一条，因为它不是"功能不对"，是**崩游戏**。
+
+`Senses.onPlaySound` 一开始直接读 `sound.getVolume()`，结果在音乐轨上炸了：
+
+```
+java.lang.NullPointerException: Cannot invoke "...Sound.getVolume()" because "this.sound" is null
+  at AbstractSoundInstance.getVolume(AbstractSoundInstance.java:75)
+  at Senses.onPlaySound(Senses.java:66)
+  ...
+  at Minecraft.tick(Minecraft.java:1821)
+```
+
+原因：`MusicManager` 起音乐时那个实例的 `Sound` 还没解析出来，`AbstractSoundInstance.getVolume()`
+直接解引用 null。而 **Forge 事件总线不吞异常**，它一路抛到 `Minecraft.tick`，客户端当场崩。
+
+**教训（写在这里免得以后再犯）**：
+
+- 请求-应答那条路（`Dispatcher.handle`）早就整段 `try/catch` 了 —— op 出错只是回一个 `ok:false`。
+- **事件回调是另一条路**，`@SubscribeEvent` 里抛出去 = 玩家掉线。
+- 所以每个事件回调的**整个函数体都要包在 try/catch 里**，宁可少记一条数据。
+- 顺带：读第三方/异步填充的对象时要能容忍内部字段还是 null（这里给 `volume`/`pitch`
+  各做了一个 `safeXxx()`，读不到填 `-1`）。
+
+### N17. 客户端统计默认是空的，要先"要"才有 ★
+
+- `LocalPlayer.getStats()`（`LocalPlayer:372`）那份 `StatsCounter` **开局是空的**。
+- 原版只在**打开统计界面**时才向服务端要：`StatsScreen:69` 发
+  `ServerboundClientCommandPacket(REQUEST_STATS)`。
+- 服务端 `ServerGamePacketListenerImpl:1529` 收到后调
+  `ServerStatsCounter.sendStats()`（`ServerStatsCounter:176`），而它**只发 dirty 的那部分**：
+
+```java
+public void sendStats(ServerPlayer p) {
+   Object2IntMap<Stat<?>> map = new Object2IntOpenHashMap<>();
+   for (Stat<?> stat : this.getDirty()) { map.put(stat, this.getValue(stat)); }
+   p.connection.send(new ClientboundAwardStatsPacket(map));
+}
+```
+
+- 所以 `stats` op 做成了**挂账型**：发一次 `REQUEST_STATS` → 等 10 tick 让回包落地 → 再读。
+  实测直接读得到 0 条 —— 那不是没统计，是还没要。
+- 只回**非零**项并按数值排序：几千个方块里绝大多数是 0，全回没有意义。
+
+### N18. 创造模式挖方块不计入 `mined` 统计 ★
+
+`ServerPlayerGameMode#destroyBlock` 里 `isCreative()` 那条分支是**提前返回**的，
+根本不调 `Block#playerDestroy`（`Block:353` 才 `awardStat(BLOCK_MINED)`）。
+实测：创造模式挖了半天石头，`mined/minecraft:stone` 一直是 0；切到生存挖一次立刻变 1。
+
+**所以"统计有没有涨"这类判据，必须弄清楚那个动作在哪个游戏模式下才算数。**
+
+### N19. 首领条只能从渲染事件拿
+
+`BossHealthOverlay.events` 是**包级私有**（`BossHealthOverlay:23`），外部读不到。
+但它每帧渲染每个首领条时会发 `CustomizeGuiOverlayEvent.BossEventProgress`
+（`BossHealthOverlay:36` → `ForgeHooksClient:594`）。所以：
+
+- 按 UUID 记"最后一次被画出来的时间"，`bossBars` op 回最近 40 tick 内出现过的；
+- 判据天然是"**屏幕上真的显示过**"，而不是"服务端说有"；
+- 消失也是靠这个 TTL 推出来的（实测招凋灵 → 读到 `Wither progress=1.0` → 清掉 → 0 条）。
+
+### N20. 声音靠 `PlaySoundEvent` 抄流水
+
+`ForgeHooksClient:408` 每播一个声音发一次 `PlaySoundEvent`，挂上就能听到"游戏在发什么声"。
+实测挖石头之后流水里出现 `minecraft:block.stone.hit` ×N 和 `minecraft:block.stone.break` ——
+**这是验证"某个动作有没有真的发生"的一条独立证据链**（不依赖位置、不依赖返回值）。
+
+---
+
 ## 11. 证据来源
 
 - 反编译产物：`mod/build/moddev/artifacts/forge-1.20.1-47.4.10-sources.jar`

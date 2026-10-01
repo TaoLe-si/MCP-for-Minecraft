@@ -69,6 +69,10 @@ public final class ClientOps {
                     case "spawn" -> out.complete(WorldOps.spawn(mc, args));
                     case "kill" -> out.complete(WorldOps.kill(mc, args));
                     case "nameTag" -> out.complete(WorldOps.nameTag(mc, args));
+                    // ---- 感官：统计 / 声音 / 首领条 ----
+                    case "stats" -> Senses.stats(mc, args, out);
+                    case "sounds" -> out.complete(Senses.sounds(mc, args));
+                    case "bossBars" -> out.complete(Senses.bossBars(mc, args));
                     case "block" -> out.complete(Blocks.block(mc, args));
                     case "blocks" -> out.complete(Blocks.blocks(mc, args));
                     case "entities" -> out.complete(Blocks.entities(mc, args));

@@ -322,3 +322,79 @@ AutoHotkey、pyautogui、把窗口抢到前台再模拟按键、虚拟 HID 设�
    而且会被成就界面抢走监听器。单机直接读服务端那份权威进度
    （`ServerAdvancementManager` + `PlayerAdvancements#getOrStartProgress`）；
    联机如实报"读不到"，不编。
+
+### [2026-10-01 23:49] 运行时修正
+
+**第五批 API 运行时核实**（`python tools/e2e_api4.py`，共 6 条）：回读核对 4，弱核对 0，失败 2。
+
+失败项：挖完之后 mined/stone 计数变大（回读核对）、stats{custom} 有内容
+- `stats`：挖一个方块之后 `mined/minecraft:stone` 计数真的涨了 —— 注意统计是**服务端回 AwardStats 包**才涨的，读之前要等。
+- `sounds`：挖石头之后声音流水里确实出现了对应的方块声（挂 `PlaySoundEvent` 抄的）。
+- `bossBars`：招出凋灵后读到它的血条，清掉之后消失 —— 判据是渲染时被画出来过（`BossHealthOverlay:36` 发的 `CustomizeGuiOverlayEvent.BossEventProgress`）。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api4`。
+
+### [2026-10-01 23:53] 运行时修正
+
+**第五批 API 运行时核实**（`python tools/e2e_api4.py`，共 6 条）：回读核对 5，弱核对 0，失败 1。
+
+失败项：挖完之后 mined/stone 计数变大（回读核对）
+- `stats`：挖一个方块之后 `mined/minecraft:stone` 计数真的涨了 —— 注意统计是**服务端回 AwardStats 包**才涨的，读之前要等。
+- `sounds`：挖石头之后声音流水里确实出现了对应的方块声（挂 `PlaySoundEvent` 抄的）。
+- `bossBars`：招出凋灵后读到它的血条，清掉之后消失 —— 判据是渲染时被画出来过（`BossHealthOverlay:36` 发的 `CustomizeGuiOverlayEvent.BossEventProgress`）。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api4`。
+
+### [2026-10-01 23:54] 运行时修正
+
+**第五批 API 运行时核实**（`python tools/e2e_api4.py`，共 6 条）：回读核对 5，弱核对 0，失败 1。
+
+失败项：挖完之后 mined/stone 计数变大（回读核对）
+- `stats`：挖一个方块之后 `mined/minecraft:stone` 计数真的涨了 —— 注意统计是**服务端回 AwardStats 包**才涨的，读之前要等。
+- `sounds`：挖石头之后声音流水里确实出现了对应的方块声（挂 `PlaySoundEvent` 抄的）。
+- `bossBars`：招出凋灵后读到它的血条，清掉之后消失 —— 判据是渲染时被画出来过（`BossHealthOverlay:36` 发的 `CustomizeGuiOverlayEvent.BossEventProgress`）。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api4`。
+
+### [2026-10-01 23:56] 运行时修正
+
+**第五批 API 运行时核实**（`python tools/e2e_api4.py`，共 6 条）：回读核对 5，弱核对 0，失败 1。
+
+失败项：挖完之后 mined/stone 计数变大（回读核对）
+- `stats`：挖一个方块之后 `mined/minecraft:stone` 计数真的涨了 —— 注意统计是**服务端回 AwardStats 包**才涨的，读之前要等。
+- `sounds`：挖石头之后声音流水里确实出现了对应的方块声（挂 `PlaySoundEvent` 抄的）。
+- `bossBars`：招出凋灵后读到它的血条，清掉之后消失 —— 判据是渲染时被画出来过（`BossHealthOverlay:36` 发的 `CustomizeGuiOverlayEvent.BossEventProgress`）。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api4`。
+
+### [2026-10-01 23:58] 运行时修正
+
+**第五批 API 运行时核实**（`python tools/e2e_api4.py`，共 6 条）：回读核对 6，弱核对 0，失败 0。
+
+无失败项。
+- `stats`：挖一个方块之后 `mined/minecraft:stone` 计数真的涨了 —— 注意统计是**服务端回 AwardStats 包**才涨的，读之前要等。
+- `sounds`：挖石头之后声音流水里确实出现了对应的方块声（挂 `PlaySoundEvent` 抄的）。
+- `bossBars`：招出凋灵后读到它的血条，清掉之后消失 —— 判据是渲染时被画出来过（`BossHealthOverlay:36` 发的 `CustomizeGuiOverlayEvent.BossEventProgress`）。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api4`。
+
+### [2026-10-02 01:0x] 运行时修正：第五批（统计 / 声音 / 首领条）
+
+**`python tools/e2e_api4.py`：6 条，回读核对 6 条，失败 0。**
+
+| # | 条目 | 回读证据 |
+|---|---|---|
+| H1/H2 | `stats{mined}` | 生存挖一个石头：`minecraft:stone` 1 → 2 |
+| H3 | `stats{custom}` | 读到 `play_time` / `total_world_time` 等 8 条非零 |
+| I1 | `sounds` | 挖石头后流水里出现 `minecraft:block.stone.hit` ×N 与 `block.stone.break` |
+| J1/J2 | `bossBars` | 招凋灵后读到 `Wither progress=1.0`；清掉后 0 条 |
+
+**这轮最重要的一条不是功能，是崩游戏：**
+
+- **事件回调里抛异常 = 整局崩。** 我读 `sound.getVolume()` 时，音乐轨那个实例内部
+  `Sound` 还是 null → NPE → Forge 事件总线把异常一路抛到 `Minecraft.tick` → 客户端崩。
+  教训：**请求-应答那条路（Dispatcher）早就 try/catch 了，事件回调是另一条路，
+  忘了包就是玩家掉线。** 现在每个 `@SubscribeEvent` 整个函数体都包住了。
+- **客户端统计默认是空的**：原版只在打开统计界面时才发 `REQUEST_STATS`
+  （`StatsScreen:69`），服务端 `ServerStatsCounter.sendStats:176` **只发 dirty 的那部分**。
+  所以 `stats` 是挂账型：先请求 → 等 10 tick → 再读。
+- **创造模式挖方块不计入 `mined` 统计**：`ServerPlayerGameMode#destroyBlock` 的
+  `isCreative()` 分支提前返回，不调 `Block#playerDestroy`。实测创造模式挖半天计数是 0，
+  切生存挖一次立刻 1。**判据必须弄清"那个动作在哪个模式下才算数"。**
+- **首领条只能从渲染事件拿**（`BossHealthOverlay.events` 是包级私有），
+  所以判据天然是"屏幕上真的显示过"。

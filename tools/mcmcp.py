@@ -912,6 +912,27 @@ TOOLS_SPEC = [
      lambda a: tool_action("nameTag", {k: a[k] for k in ("entityId", "name", "visible")
                                        if k in a}, True)),
 
+    # ---------------- 感官：统计 / 声音 / 首领条 ----------------
+    ("mc_stats", "玩家统计（只回非零项，按数值排序）。",
+     {"type": "object", "properties": {
+         "category": {"type": "string", "description":
+                      "mined（挖方块）/ crafted（合成）/ used（使用物品）/ broken（用坏）/ "
+                      "picked_up（捡起）/ dropped（丢出）/ killed（击杀）/ killed_by（被什么杀）/ "
+                      "custom（自定义，如游戏时长、死亡次数）。默认 custom"},
+         "filter": {"type": "string", "description": "按名字子串过滤"},
+         "limit": {"type": "integer", "description": "最多回多少，默认 40"}}},
+     lambda a: tool_obs("stats", {k: a[k] for k in ("category", "filter", "limit")
+                                  if k in a})),
+    ("mc_sounds", "最近听到的声音（挂 PlaySoundEvent 抄的流水，最多 300 条）。"
+                  "可以用来确认「某个动作有没有真的发出声音」。",
+     {"type": "object", "properties": {
+         "filter": {"type": "string", "description": "声音名子串，如 block.stone"},
+         "limit": {"type": "integer", "description": "最多回多少，默认 40"}}},
+     lambda a: tool_obs("sounds", {k: a[k] for k in ("filter", "limit") if k in a})),
+    ("mc_bossbars", "当前显示着的首领血条（末影龙/凋灵/袭击）。判据是渲染时被画出来过。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_obs("bossBars", {})),
+
     # ---------------- 工程 ----------------
     ("mc_build", "跑 gradle 构建（默认 build），只回错误行。",
      {"type": "object", "properties": {"target": {"type": "string"}}},

@@ -180,6 +180,25 @@
 | N14 | 村民会游荡 + `getOffers().isEmpty()` 就不开界面 | 上一轮能过、这一轮过不了 |
 | N15 | 客户端 `ClientAdvancements.progress` 是私有的 | 联机读不到进度，如实上报 |
 
+
+## O. 第五批：统计 / 声音 / 首领条（已全部运行时核实）
+
+| # | 能力 | op | 实现 | 静态证据 | 运行时 | 状态 |
+|---|---|---|---|---|---|---|
+| O1 | 玩家统计（按类别，只回非零） | `stats` | Senses | `LocalPlayer.getStats() :372` + `StatsScreen:69` 要先请求 | 生存挖石头 stone 1→2 | 已核 |
+| O2 | 听到的声音流水 | `sounds` | Senses | `ForgeHooksClient.playSound() :408` 发 `PlaySoundEvent` | 挖石头后出现 hit/break 声 | 已核 |
+| O3 | 当前首领血条 | `bossBars` | Senses | `BossHealthOverlay:36` 发 `CustomizeGuiOverlayEvent.BossEventProgress` | 凋灵出现/消失 | 已核 |
+
+第五批挖出的 5 条规则（`skills/minecraft-api/SKILL.md` 第 10 章 N16-N20）：
+
+| # | 规则 | 后果 |
+|---|---|---|
+| N16 | **事件回调抛异常 = 整局崩**（Forge 事件总线不吞异常，会一路抛到 `Minecraft.tick`） | 实测崩在音乐轨 `getVolume()` 的 NPE 上 |
+| N17 | 客户端统计默认空的，只在打开统计界面时才请求；服务端只发 dirty 那部分 | 直接读得到 0 条，容易误判"没有统计" |
+| N18 | 创造模式挖方块不计入 `mined`（`destroyBlock` 的 `isCreative()` 提前返回） | 判据必须弄清"该动作在哪个模式下才算数" |
+| N19 | 首领条只能从渲染事件拿（`BossHealthOverlay.events` 包级私有） | 判据天然变成"屏幕上真的显示过" |
+| N20 | 声音靠 `PlaySoundEvent` 抄流水 | 得到一条不依赖位置/返回值的独立证据链 |
+
 ## 未覆盖 / 明确不做（写在明处，别装作覆盖了）
 
 | 项 | 原因 |
@@ -193,7 +212,7 @@
 
 ## 覆盖统计
 
-- 已核（静+运）：**67** 条（其中 7 条是弱核对：只确认请求发出、结果由服务端裁决）
+- 已核（静+运）：**70** 条（其中 7 条是弱核对：只确认请求发出、结果由服务端裁决）
 - 已核静态（待运行时核实）：**0** 条
 - 未实现：**0** 条（本表登记的都在代码里了）
 
@@ -202,6 +221,9 @@
 
 第三/四批（交易 / 进度 / 世界设定 / 实体）：`python tools/e2e_api3.py` —— **10 条，
 10 条回读核对通过、0 失败**。原始记录见 `kind=e2e_api3`。
+
+第五批（统计 / 声音 / 首领条）：`python tools/e2e_api4.py` —— **6 条，
+6 条回读核对通过、0 失败**。原始记录见 `kind=e2e_api4`。
 
 ### 第二轮挖出来的原版规则（详见 `skills/minecraft-api/SKILL.md` 第 10 章）
 
