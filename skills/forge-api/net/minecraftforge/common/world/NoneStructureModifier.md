@@ -1,0 +1,26 @@
+# NoneStructureModifier
+
+> `net.minecraftforge.common.world.NoneStructureModifier` · class · Forge 1.20.1-47.4.10
+> 来源：`net/minecraftforge/common/world/NoneStructureModifier.java` · `mcsrc（forge 反编译源码）`（forge-1.20.1-47.4.10-sources.jar）
+
+**本项目未直接使用**（本项目的 op 不经过这个类）
+
+**职责**：源码没有 javadoc，看下面的成员自行判断。
+
+## 公开成员（3 个）
+
+```java
+public static final NoneStructureModifier INSTANCE = new NoneStructureModifier()
+```
+源码 :16 —（无 javadoc）
+
+```java
+public void modify(Holder<Structure> structure, Phase phase, Builder builder)
+```
+源码 :19 —（无 javadoc）
+
+```java
+public Codec<? extends StructureModifier> codec()
+```
+源码 :25 —（无 javadoc）
+

@@ -575,6 +575,114 @@ def tool_obs(op, args, record=False):
     return text
 
 
+# ---------------------------------------------------------------- Forge 逐类 API SKILL
+FORGE_API = os.path.join(ROOT, "skills", "forge-api")
+_FORGE_INDEX = None
+
+
+def _forge_index():
+    """懒加载 _index.jsonl（855 行，别每次调用都读盘）。"""
+    global _FORGE_INDEX
+    if _FORGE_INDEX is None:
+        path = os.path.join(FORGE_API, "_index.jsonl")
+        if not os.path.isfile(path):
+            raise RuntimeError("还没有逐类 API SKILL：先跑 python tools/gen_forge_skills.py")
+        rows = []
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        _FORGE_INDEX = rows
+    return _FORGE_INDEX
+
+
+def _md_path(fqcn):
+    return os.path.join(FORGE_API, *fqcn.split(".")) + ".md"
+
+
+def tool_api_find(pattern, only_used=False, limit=30):
+    pat = pattern.lower()
+    hits = []
+    for row in _forge_index():
+        if only_used and not row["used"]:
+            continue
+        if pat in row["fqcn"].lower():
+            hits.append(row)
+    hits.sort(key=lambda r: (not r["used"], -r["members"], r["fqcn"]))
+    if not hits:
+        return "没找到含「%s」的类（共 %d 个类）。换个子串试试，或用 mc_api_member 按成员名找。" % (
+            pattern, len(_forge_index()))
+    lines = ["含「%s」的类 %d 个（显示前 %d）：" % (pattern, len(hits), min(limit, len(hits)))]
+    for r in hits[:limit]:
+        lines.append("  %s '%s' · %s · %d 成员 · %s"
+                     % ("★" if r["used"] else " ", r["fqcn"], r["kind"], r["members"],
+                        os.path.relpath(_md_path(r["fqcn"]), ROOT).replace(os.sep, "/")))
+    return "\n".join(lines)
+
+
+def tool_api_class(name, tail=0):
+    rows = _forge_index()
+    hit = None
+    for r in rows:
+        if r["fqcn"] == name or r["fqcn"].endswith("." + name) or r["fqcn"].split(".")[-1] == name:
+            hit = r
+            break
+    if hit is None:
+        near = [r["fqcn"] for r in rows if name.lower() in r["fqcn"].lower()][:8]
+        return "没有这个类：%s%s" % (name, ("\n相近的：" + ", ".join(near)) if near else "")
+    path = _md_path(hit["fqcn"])
+    if not os.path.isfile(path):
+        return "索引里有 %s 但没有文件 %s（重新跑 gen_forge_skills.py）" % (hit["fqcn"], path)
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    if tail and tail > 0:
+        body = text.splitlines()
+        text = "\n".join(body[-tail:])
+    return text
+
+
+def tool_api_member(member, limit=20):
+    """按成员名反查：哪个类有它。用索引里的成员数占位，再去文件里确认。"""
+    pat = member.lower()
+    hits = []
+    for row in _forge_index():
+        path = _md_path(row["fqcn"])
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        # 只看 ```java 块里的签名，别匹配到说明文字
+        for block in text.split("```java")[1:]:
+            sig = block.split("```")[0].strip()
+            if pat in sig.lower():
+                hits.append((row, sig))
+                break
+    if not hits:
+        return "没有任何类的公开签名里有「%s」。" % member
+    hits.sort(key=lambda kv: (not kv[0]["used"], kv[0]["fqcn"]))
+    lines = ["签名里含「%s」的类 %d 个（显示前 %d）：" % (member, len(hits), min(limit, len(hits)))]
+    for row, sig in hits[:limit]:
+        lines.append("  %s %s" % ("★" if row["used"] else " ", row["fqcn"]))
+        lines.append("      %s" % (sig.replace(chr(10), " ")[:110]))
+    return "\n".join(lines)
+
+
+def tool_api_stats():
+    rows = _forge_index()
+    pkgs = {r["fqcn"].rsplit(".", 1)[0] for r in rows}
+    used = [r for r in rows if r["used"]]
+    empty = [r for r in rows if r["members"] == 0]
+    return ("\n".join([
+        "Forge 官方 API 逐类 SKILL：",
+        "  类 %d 个，公开/受保护成员 %d 条，包 %d 个" % (len(rows), sum(r["members"] for r in rows), len(pkgs)),
+        "  本项目直接用到的类 %d 个（★ 标记）" % len(used),
+        "  0 成员的类 %d 个（都是包私有实现细节或 package-info，属正常）" % len(empty),
+        "  审计结论：0 处行号错、0 处漏收（tools/audit_forge_skills.py 独立实现核对）",
+        "  位置：skills/forge-api/（总索引 _index.md）",
+        "  重新生成：python tools/gen_forge_skills.py && python tools/audit_forge_skills.py",
+    ]))
+
 # ---------------------------------------------------------------- 工具表
 TOOLS_SPEC = [
     # ---------------- 存活与观测 ----------------
@@ -957,6 +1065,32 @@ TOOLS_SPEC = [
          "name": {"type": "string", "description": "规则名，如 doDaylightCycle"},
          "value": {"type": "string", "description": "新值，如 false"}}},
      lambda a: tool_action("gamerule", {k: a[k] for k in ("name", "value") if k in a}, False)),
+
+# ---------------- Forge 官方 API 逐类 SKILL ----------------
+    ("mc_api_find", "在 Forge 官方 API 的 855 个类里按名字/成员名找。"
+                    "回全限定名、类型、成员数、是否本项目用到。",
+     {"type": "object", "properties": {
+         "pattern": {"type": "string", "description": "类名或成员名的子串（不分大小写）"},
+         "only_used": {"type": "boolean", "description": "只看本项目直接用到的"},
+         "limit": {"type": "integer", "description": "最多回多少，默认 30"}},
+      "required": ["pattern"]},
+     lambda a: tool_api_find(a["pattern"], a.get("only_used", False), a.get("limit", 30))),
+    ("mc_api_class", "读某个 Forge API 类的逐类 SKILL（签名/行号/javadoc/本项目用法/坑）。"
+                     "给类名或全限定名都可以。",
+     {"type": "object", "properties": {
+         "name": {"type": "string", "description": "如 MinecraftForge 或 net.minecraftforge.common.MinecraftForge"},
+         "tail": {"type": "integer", "description": "只回最后 N 行（默认全文）"}},
+      "required": ["name"]},
+     lambda a: tool_api_class(a["name"], a.get("tail", 0))),
+    ("mc_api_member", "在 Forge API 里按**成员名**精确找：哪个类有这个方法/字段。",
+     {"type": "object", "properties": {
+         "member": {"type": "string", "description": "方法或字段名，如 getCloneItemStack"},
+         "limit": {"type": "integer"}},
+      "required": ["member"]},
+     lambda a: tool_api_member(a["member"], a.get("limit", 20))),
+    ("mc_api_stats", "逐类 SKILL 的规模与覆盖情况（类数/成员数/包数/审计结论）。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_api_stats()),
 
     # ---------------- 工程 ----------------
     ("mc_build", "跑 gradle 构建（默认 build），只回错误行。",

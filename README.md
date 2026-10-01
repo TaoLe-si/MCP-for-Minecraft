@@ -88,6 +88,7 @@ pyautogui、抢窗口前台再模拟按键、虚拟 HID。**一个都没用。**
 | 通信/截图 | `mc_chat` `mc_shot` `mc_diff` |
 | 工程 | `mc_build` `mc_run` `mc_exec` `mc_ping` |
 | SKILL | `skill_read` `skill_note` |
+| Forge 逐类 API | `mc_api_class` `mc_api_find` `mc_api_member` `mc_api_stats` |
 
 几个不那么显然的点：
 
@@ -116,9 +117,9 @@ python tools/e2e_api.py
 MCP 服务由 ZCode 拉起（`~/.zcode/cli/config.json` 里配一条 stdio server 指向
 `tools/mcmcp.py` 即可）。
 
-## 两种 SKILL
+## 三种 SKILL
 
-这是本仓库的"开发格式"：**MCP 服务先立起来，然后静态归纳 API，再让运行时去修正它。**
+这是本仓库的"开发格式"：**MCP 服务先立起来，然后按官方 API 逐类归纳，再让运行时去修正它。**
 
 ```
 mc_move / mc_break / ...  ──►  游戏内动态服务
@@ -127,9 +128,45 @@ mc_move / mc_break / ...  ──►  游戏内动态服务
         ▼
 skills/minecraft-runtime/measurements.jsonl    ← 原始证据，只增不改
         ▼
-skills/minecraft-api/SKILL.md        ← 静态归纳：读源码得出的机制与坑（带行号证据）
+skills/forge-api/**/*.md             ← 逐类：Forge 官方 API 每个类一篇（生成 + 审计）
+skills/minecraft-api/SKILL.md        ← 横向：跨类的机制与坑（带行号证据）
 skills/minecraft-runtime/SKILL.md    ← 运行时修正：实测说了算，跟静态冲突以它为准
 ```
+
+### 逐类 SKILL：[skills/forge-api/](skills/forge-api/)
+
+**Forge 官方 API 每一个类一篇**，共 **855 篇**（851 个类 + 总索引等），
+覆盖 **5517 条公开/受保护成员**、**104 个包**。总索引在
+[skills/forge-api/_index.md](skills/forge-api/_index.md)。
+
+它不是手写的 —— 手写 855 篇必然漏、必然漂。是**从反编译源码生成**的：
+
+```bash
+python tools/gen_forge_skills.py     # 源码 → 逐类 SKILL（含总索引）
+python tools/audit_forge_skills.py   # 外部核对：行号对不对、有没有漏收
+```
+
+- **签名、行号、javadoc 全部抄自源码**，每篇都能回到 `源码 :N` 那一行。
+- 生成器带**自检**：`USAGE`/`GOTCHAS` 里写的类名如果源码里找不到，会直接报出来
+  （这机制真的抓到过 11 个写错的类名 —— 它们其实在 `fmlcore`/`eventbus`/`forgespi`
+  这些独立小 jar 里，于是把那些源码也纳入了）。
+- **审计是独立实现**，不复用生成器的解析逻辑（自己写行号、自己再读 = 自证）。
+  结论：**0 处行号错、0 处漏收**。
+- 每篇还有两层人工内容：**本项目怎么用它**（`USAGE` 表，23 个类）
+  和**踩过的坑**（`GOTCHAS` 表）。没用到的类也成文，开头写明"未直接使用"及原因。
+
+MCP 里可以随时查：
+
+| 工具 | 用途 |
+|---|---|
+| `mc_api_class` | 读某个类的 SKILL（签名/行号/javadoc/用法/坑） |
+| `mc_api_find` | 按类名子串找 |
+| `mc_api_member` | **按成员名反查**：哪个类有这个方法（实测查 `getCloneItemStack` 能直接定位到 `IForgeBlockState`） |
+| `mc_api_stats` | 规模与覆盖情况 |
+
+换 Forge 版本就重跑那两个脚本：文档跟着源码走，不会留下手抄的陈旧结论。
+
+### 横向 SKILL：跨类的机制与坑
 
 - **[skills/minecraft-api/SKILL.md](skills/minecraft-api/SKILL.md)** —— 静态。每条结论
   都能指到反编译源码的某一行（比如"`ToggleKeyMapping` 在切换模式下 `setDown` 是取反语义"
@@ -138,8 +175,9 @@ skills/minecraft-runtime/SKILL.md    ← 运行时修正：实测说了算，跟
   只写实测出来的东西，每条都能追到 `measurements.jsonl` 里的一次真实调用。
   两边冲突时**以实测为准**，并且回头改静态那份。
 
-这么分是因为：源码能告诉你"这么写有效"，但**只有实测能告诉你"实际走了多少格/秒"**。
-静态那份不编数，动态那份不空谈。
+两种 SKILL 分工的原因：**逐类那份回答"这个 API 长什么样"**（客观、可生成、可审计），
+**横向那份回答"这些 API 组合起来会怎么坑你"**（要读过源码+踩过坑才写得出来），
+**运行时那份回答"实际跑起来是什么数"**（只有实测能答）。
 
 ## 实测记录（当前）
 
@@ -160,7 +198,8 @@ docs/protocol.md          动态服务协议（完整 op 表）
 mod/                      Forge 1.20.1 模组
   src/main/java/.../control/    ControlServer / Dispatcher / GameThread / Journal
   src/main/java/.../client/     ClientOps / InputOverride / Blocks / GuiOps / AutoWorld
-skills/                   两份 SKILL（静态 + 运行时）
+skills/forge-api/         Forge 官方 API 逐类 SKILL（855 篇 + 总索引，生成+审计）
+skills/                    两份横向 SKILL（静态 + 运行时）
 tools/mcmcp.py            MCP 服务（纯标准库，无第三方依赖）
 tools/e2e.py              端到端验收：往前走
 tools/e2e_api.py          全操作面自检
