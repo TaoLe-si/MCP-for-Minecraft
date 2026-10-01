@@ -11,7 +11,7 @@
 ## 它长什么样
 
 ```
-MCP 工具 (tools/mcmcp.py，69 个)
+MCP 工具 (tools/mcmcp.py，65 个)
    │  mc_move / mc_break / mc_click_button / mc_log ...
    ▼  换行分隔 JSON 包（docs/protocol.md）
    ▼  TCP 127.0.0.1:25585
@@ -71,7 +71,7 @@ pyautogui、抢窗口前台再模拟按键、虚拟 HID。**一个都没用。**
 
 ## 操作面
 
-65 个 MCP 工具，五类（完整表在 [docs/protocol.md](docs/protocol.md)）：
+65 个 MCP 工具，几大类（完整表在 [docs/protocol.md](docs/protocol.md)）：
 
 | 类别 | 工具 |
 |---|---|
