@@ -1,0 +1,30 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "MIT"
+issueTrackerURL = "https://github.com/TaoLe-si/MCP-for-Minecraft/issues"
+
+[[mods]]
+modId = "mcpforminecraft"
+version = "${file.jarVersion}"
+displayName = "MCP for Minecraft"
+authors = "TaoLe-si"
+description = '''
+在游戏里开一个本地控制端口（动态服务），把「往前走」这类动作暴露成换行分隔的 JSON 包，
+由 tools/mcmcp.py 的 MCP 服务转发给 AI 代理。
+'''
+
+[[dependencies.mcpforminecraft]]
+modId = "forge"
+type = "required"
+mandatory = true
+versionRange = "[47,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.mcpforminecraft]]
+modId = "minecraft"
+type = "required"
+mandatory = true
+versionRange = "[1.20.1,1.21)"
+ordering = "NONE"
+side = "BOTH"

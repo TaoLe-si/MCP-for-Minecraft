@@ -1,0 +1,67 @@
+// MCP for Minecraft —— Forge 1.20.1 模组
+//
+// 基线：MinecraftForge 47.4.10（1.20.1 官方 recommended = 稳定版）
+// 工具链：ModDevGradle LegacyForge（ForgeGradle 6 的替代，见
+//        https://github.com/neoforged/ModDevGradle/blob/main/LEGACY.md）
+//        —— 它同时给出 runClient/runServer，端到端验证不用另外装启动器。
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev.legacyforge' version '2.0.91'
+}
+
+group = 'com.taolesi'
+version = '0.1.0'
+
+base {
+    archivesName = 'mcpforminecraft'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+legacyForge {
+    version = '1.20.1-47.4.10'
+
+    runs {
+        client {
+            client()
+            // 动态服务端口；-Dmcpforminecraft.port 可在别处覆盖
+            systemProperty 'mcpforminecraft.port', '25585'
+        }
+        // 自动化验证专用：开局自动建一个超平坦世界，无人值守也能走到"往前走"那一步
+        clientAuto {
+            client()
+            systemProperty 'mcpforminecraft.port', '25585'
+            systemProperty 'mcpforminecraft.autoworld', 'mcp'
+            // 固定起点：自动化要可复现，且必须落在"世界加载时已生成"的区块里
+            systemProperty 'mcpforminecraft.spawn', '0,-60,0'
+        }
+        server {
+            server()
+        }
+    }
+
+    mods {
+        mcpforminecraft {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// 开发期不需要 reobf 产物之外的额外处理；jar 由 MDG 自动 reobf 到 SRG。
+jar {
+    manifest {
+        attributes([
+            'Specification-Title'   : 'mcpforminecraft',
+            'Specification-Vendor'  : 'TaoLe-si',
+            'Specification-Version' : '1',
+            'Implementation-Title'  : project.name,
+            'Implementation-Version': project.version,
+        ])
+    }
+}

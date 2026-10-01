@@ -1,0 +1,37 @@
+# ---- Gradle ----
+.gradle/
+build/
+!mod/gradle/wrapper/gradle-wrapper.jar
+out/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# ---- 开发运行产物（runClient/runServer 的工作目录）----
+run/
+runs/
+logs/
+crash-reports/
+
+# ---- 运行时产物 ----
+artifacts/
+shots/
+*.png
+!docs/**/*.png
+
+# ---- 杂项 ----
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# ---- Python ----
+__pycache__/
+*.pyc
