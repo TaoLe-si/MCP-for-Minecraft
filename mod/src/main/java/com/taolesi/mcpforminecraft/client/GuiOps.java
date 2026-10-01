@@ -199,6 +199,121 @@ public final class GuiOps {
         return Observation.pair(before, Observation.of(mc), extra);
     }
 
+    /**
+     * 设置界面上的滑块/复选框。
+     *
+     * <p>为什么滑块不能直接"设值"：{@code AbstractSliderButton.setValue(double)}
+     * 是 **private** 的（`AbstractSliderButton:119`）。它只认鼠标：
+     * {@code onClick(x)} → {@code setValueFromMouse(x)} →
+     * {@code setValue((x - (getX()+4)) / (width-8))}，而且**钳到 0..1**。
+     * 所以要按比例算出 x 再点过去 —— 跟真人拖滑块是同一条路。
+     *
+     * <p>复选框（{@code Checkbox extends AbstractButton}）就简单：点中心即切换。
+     */
+    static JsonObject setWidget(Minecraft mc, JsonObject args) {
+        Screen screen = requireScreen(mc);
+        List<AbstractWidget> all = widgets(screen);
+        AbstractWidget target = pickWidget(all, args);
+
+        JsonObject before = Observation.of(mc);
+        JsonObject extra = new JsonObject();
+        extra.addProperty("widget", target.getMessage().getString());
+        extra.addProperty("type", target.getClass().getSimpleName());
+        int cx;
+        int cy = target.getY() + target.getHeight() / 2;
+
+        if (target instanceof net.minecraft.client.gui.components.AbstractSliderButton slider) {
+            double want = Math.max(0.0, Math.min(1.0,
+                    args.has("value") ? args.get("value").getAsDouble() : 0.5));
+            cx = slider.getX() + 4 + (int) Math.round((slider.getWidth() - 8) * want);
+            extra.addProperty("requestedValue", want);
+            extra.addProperty("note", "滑块只认鼠标位置（setValue 是私有的），按比例算 x 再点过去");
+        } else if (target instanceof net.minecraft.client.gui.components.Checkbox) {
+            cx = target.getX() + target.getWidth() / 2;
+            extra.addProperty("requestedValue", !args.has("value")
+                    || args.get("value").getAsBoolean());
+            extra.addProperty("note", "复选框点一下就是切换");
+        } else {
+            cx = target.getX() + target.getWidth() / 2;
+            extra.addProperty("note", "不是滑块也不是复选框，当普通按钮点一下");
+        }
+
+        boolean handled = screen.mouseClicked(cx, cy, 0);
+        screen.mouseReleased(cx, cy, 0);
+        Journal.event("op", "setWidget " + target.getMessage().getString() + " @" + cx + "," + cy);
+        extra.addProperty("at", cx + "," + cy);
+        extra.addProperty("handled", handled);
+        return Observation.pair(before, Observation.of(mc), extra);
+    }
+
+    /**
+     * 直接打开某个原版界面。
+     *
+     * <p>为什么需要它：很多界面在游戏里**没有对应的按键**（比如设置、视频设置、
+     * 统计），或者要一层层点进去。想驱动它们就得能直接开。
+     *
+     * <p>开关列表是白名单，不是"什么都能开"：这里只放**构造函数参数明确、且不需要
+     * 额外状态**的那几个。`public XxxScreen(Screen last, Options options)` 这类是标准的，
+     * 直接构造即可；复杂的（成就树、世界选择）不做，免得照顾一堆前置状态。
+     */
+    static JsonObject openScreen(Minecraft mc, JsonObject args) {
+        String which = args.get("screen").getAsString().toLowerCase();
+        // **父界面不仅要非 null，还得是"已经被 init 过"的**。
+        // 踩了两轮：第一轮传了 null → NPE；第二轮传了个刚 new 出来的 PauseScreen →
+        // 还是 NPE，报的是 `p_96806_.minecraft` 为 null。
+        // 原因：`Screen.minecraft` 是在 `Screen.init(Minecraft, w, h)` 里才赋值的，
+        // 而 `init` 由 `Minecraft.setScreen()` 调用。所以先把它 setScreen 上去
+        // （这一步就完成了 init），再拿 `mc.screen` 当父界面 —— 跟真人从 ESC 进设置同一条路。
+        if (mc.screen == null) {
+            mc.setScreen(new net.minecraft.client.gui.screens.PauseScreen(true));
+        }
+        Screen last = mc.screen;
+        Screen target = switch (which) {
+            case "options" -> new net.minecraft.client.gui.screens.OptionsScreen(last, mc.options);
+            case "video" -> new net.minecraft.client.gui.screens.VideoSettingsScreen(last, mc.options);
+            case "sound" -> new net.minecraft.client.gui.screens.SoundOptionsScreen(last, mc.options);
+            case "language" -> new net.minecraft.client.gui.screens.LanguageSelectScreen(last,
+                    mc.options, mc.getLanguageManager());
+            case "stats" -> new net.minecraft.client.gui.screens.achievement.StatsScreen(last,
+                    InputOverride.requireWorld(mc).getStats());
+            case "social" -> new net.minecraft.client.gui.screens.social.SocialInteractionsScreen();
+            case "skin" -> new net.minecraft.client.gui.screens.SkinCustomizationScreen(last, mc.options);
+            case "mouse" -> new net.minecraft.client.gui.screens.MouseSettingsScreen(last, mc.options);
+            default -> throw new IllegalArgumentException("不支持直接打开「" + which
+                    + "」（可用 options/video/sound/language/stats/social/skin/mouse；"
+                    + "其它界面请用 press + clickButton 一层层点进去）");
+        };
+        JsonObject before = Observation.of(mc);
+        mc.setScreen(target);
+        Journal.event("op", "openScreen " + which);
+        JsonObject extra = new JsonObject();
+        extra.addProperty("screen", target.getClass().getSimpleName());
+        extra.addProperty("note", "直接构造并 setScreen 上去的（这些界面构造函数只吃 Screen+Options）");
+        return Observation.pair(before, Observation.of(mc), extra);
+    }
+
+    /** 按 label / index 找控件（跟 clickButton 同一套找法）。 */
+    private static AbstractWidget pickWidget(List<AbstractWidget> all, JsonObject args) {
+        if (args.has("index")) {
+            int index = args.get("index").getAsInt();
+            if (index < 0 || index >= all.size()) {
+                throw new IllegalArgumentException("没有序号 " + index + " 的控件；当前共 "
+                        + all.size() + " 个：" + labels(all));
+            }
+            return all.get(index);
+        }
+        if (args.has("label")) {
+            String want = args.get("label").getAsString().toLowerCase();
+            for (AbstractWidget w : all) {
+                if (w.getMessage().getString().toLowerCase().contains(want)) {
+                    return w;
+                }
+            }
+            throw new IllegalArgumentException("没有文字含「" + want + "」的控件；当前有：" + labels(all));
+        }
+        throw new IllegalArgumentException("要指定 label 或 index");
+    }
+
     static JsonObject closeScreen(Minecraft mc) {
         Screen screen = requireScreen(mc);
         String which = screen.getClass().getSimpleName();

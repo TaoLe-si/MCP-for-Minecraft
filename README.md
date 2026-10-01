@@ -11,7 +11,7 @@
 ## 它长什么样
 
 ```
-MCP 工具 (tools/mcmcp.py，61 个)
+MCP 工具 (tools/mcmcp.py，69 个)
    │  mc_move / mc_break / mc_click_button / mc_log ...
    ▼  换行分隔 JSON 包（docs/protocol.md）
    ▼  TCP 127.0.0.1:25585
@@ -71,19 +71,20 @@ pyautogui、抢窗口前台再模拟按键、虚拟 HID。**一个都没用。**
 
 ## 操作面
 
-61 个 MCP 工具，五类（完整表在 [docs/protocol.md](docs/protocol.md)）：
+65 个 MCP 工具，五类（完整表在 [docs/protocol.md](docs/protocol.md)）：
 
 | 类别 | 工具 |
 |---|---|
 | 观测（基础） | `mc_state` `mc_probe` `mc_block` `mc_blocks` `mc_entities` `mc_inventory` `mc_screen` `mc_ray` |
 | 观测（纵深） | `mc_vitals` `mc_world` `mc_light` `mc_biome` `mc_block_entity` `mc_entity_info` `mc_scoreboard` `mc_server` `mc_recipes` `mc_recipe_book` `mc_advancements` |
 | 日志 | `mc_log` `mc_chatlog` `mc_events` |
-| 感官 | `mc_stats` `mc_sounds` `mc_bossbars` |
+| 感官 | `mc_stats` `mc_sounds` `mc_bossbars` `mc_cooldowns` |
 | 输入 | `mc_move` `mc_key` `mc_press` `mc_jump` `mc_look` `mc_look_at` |
 | 世界改动 | `mc_break` `mc_place` `mc_interact` `mc_attack` `mc_use` `mc_select_slot` `mc_scroll` `mc_use_on_entity` `mc_place_recipe` `mc_creative_give` `mc_spawn` `mc_kill` `mc_name_tag` `mc_set_world` |
 | 交易 | `mc_trades` `mc_trade` |
+| 世界规则 | `mc_gamerule` |
 | 长尾动作 | `mc_act`（digStatus/drop/pickItem/startUsing/releaseUsing/stopBreak/sleep/wakeUp/respawn/fly/ride/dismount/openInventory/clientLevel/recipeOptions/containerButton） |
-| 界面 | `mc_click_button` `mc_type_text` `mc_click_slot` `mc_close_screen` |
+| 界面 | `mc_click_button` `mc_type_text` `mc_click_slot` `mc_close_screen` `mc_set_widget` `mc_open_screen` |
 | 通信/截图 | `mc_chat` `mc_shot` `mc_diff` |
 | 工程 | `mc_build` `mc_run` `mc_exec` `mc_ping` |
 | SKILL | `skill_read` `skill_note` |

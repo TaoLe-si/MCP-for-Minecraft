@@ -102,6 +102,26 @@ public final class Info {
         return out;
     }
 
+    /** 哪些物品正在冷却、还剩多少（弓、末影珍珠、盾、紫颂果…）。 */
+    static JsonObject cooldowns(Minecraft mc) {
+        LocalPlayer p = InputOverride.requireWorld(mc);
+        var cooldowns = p.getCooldowns();
+        JsonArray out = new JsonArray();
+        for (var item : ForgeRegistries.ITEMS.getValues()) {
+            if (!cooldowns.isOnCooldown(item)) {
+                continue;
+            }
+            JsonObject o = new JsonObject();
+            o.addProperty("item", ForgeRegistries.ITEMS.getKey(item).toString());
+            o.addProperty("percent", cooldowns.getCooldownPercent(item, 0.0F));
+            out.add(o);
+        }
+        JsonObject o = new JsonObject();
+        o.add("cooldowns", out);
+        o.addProperty("count", out.size());
+        return o;
+    }
+
     // ------------------------------------------------------------------ 世界
 
     /** 时间/天气/难度/维度/世界边界。 */

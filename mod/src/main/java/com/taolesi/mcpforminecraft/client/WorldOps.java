@@ -178,6 +178,85 @@ public final class WorldOps {
         return Observation.pair(before, Observation.of(mc), extra);
     }
 
+    /**
+     * 游戏规则：不带参数列出全部（45 条，直接读客户端 {@code GameRules}）；
+     * 给 name 查一条 / 给 name+value 改一条（走 `/gamerule` 命令，服务端裁决）。
+     *
+     * <p>为什么要自己攒规则清单：`GameRules` 没有公开的遍历入口，`/gamerule` 也
+     * **不支持无参列出全部**（实测回 "Unknown or incomplete command"）。
+     * 名单见 {@link GameRuleset}，那 45 个字段是照着 1.20.1 源码抄的。
+     *
+     * <p>改规则之后**客户端这份可能还是旧值**：原版只同步少部分规则给客户端。
+     * 所以改完要确认的话，用 `gamerule{name}`（走命令，服务端权威）再查一次。
+     */
+    static JsonObject gamerule(Minecraft mc, JsonObject args) {
+        LocalPlayer player = InputOverride.requireWorld(mc);
+        JsonObject o = new JsonObject();
+
+        if (!args.has("name")) {
+            var rules = player.level().getGameRules();
+            JsonObject values = new JsonObject();
+            for (var entry : GameRuleset.all().entrySet()) {
+                values.addProperty(entry.getKey(), readRule(rules, entry.getValue()));
+            }
+            o.add("rules", values);
+            o.addProperty("count", values.size());
+            o.addProperty("source", "client");
+            o.addProperty("note", "读的是客户端这份 GameRules（45 条，名单抄自 1.20.1 源码）；"
+                    + "原版只同步少部分规则给客户端，个别值可能滞后，要权威值用 name 走命令查");
+            return o;
+        }
+
+        String name = args.get("name").getAsString();
+        GameRuleset.byName(name);   // 名字错就当场报，并提示用哪个名字
+        JsonObject local = new JsonObject();
+        local.addProperty("localValue",
+                readRule(player.level().getGameRules(), GameRuleset.byName(name)));
+
+        if (!args.has("value")) {
+            if (mc.getConnection() != null) {
+                mc.getConnection().sendCommand("gamerule " + name);
+            }
+            o.add("local", local);
+            o.addProperty("queried", name);
+            o.addProperty("note", "权威答案在 chatlog 里（原版把结果打在聊天里）");
+            return o;
+        }
+
+        String value = args.get("value").getAsString();
+        JsonObject before = Observation.of(mc);
+        if (mc.getConnection() != null) {
+            mc.getConnection().sendCommand("gamerule " + name + " " + value);
+        }
+        Journal.event("op", "gamerule " + name + " = " + value);
+        JsonObject extra = new JsonObject();
+        extra.addProperty("rule", name);
+        extra.addProperty("value", value);
+        extra.add("before", local);
+        extra.addProperty("note", "命令是服务端裁决 + 下一拍生效；本地那份可能滞后，"
+                + "要确认就再用 gamerule{name} 查一次（结果在 chatlog）");
+        return Observation.pair(before, Observation.of(mc), extra);
+    }
+
+    private static String readRule(net.minecraft.world.level.GameRules rules,
+                                   net.minecraft.world.level.GameRules.Key<?> key) {
+        return readRuleRaw(rules, key);
+    }
+
+    /**
+     * 读一条规则的值。
+     *
+     * <p>{@code GameRules.Value} 没有 {@code get()}（它是 {@code Value<T extends Value<T>>}
+     * 这种自引用泛型，取不出统一类型），公开的取值口是 {@code serialize()}
+     * （`GameRules:426`）—— 正好回的就是命令里那种字符串形式（"true"/"3"）。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static String readRuleRaw(net.minecraft.world.level.GameRules rules,
+                                      net.minecraft.world.level.GameRules.Key<?> key) {
+        var value = rules.getRule((net.minecraft.world.level.GameRules.Key) key);
+        return value == null ? "?" : value.serialize();
+    }
+
     // ---------------------------------------------------------------- 实体
 
     /** 生成一个实体，并**回读确认它真的出现了**（返回它的 id）。 */

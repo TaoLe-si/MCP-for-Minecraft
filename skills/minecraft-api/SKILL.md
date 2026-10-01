@@ -418,6 +418,57 @@ public void sendStats(ServerPlayer p) {
 
 ---
 
+### N21. `openScreen` 的父界面必须**已经被 init 过** ★
+
+想直接打开某个界面（视频设置这类没有按键入口的），构造时要传一个"父界面"。
+这里连踩两轮 NPE：
+
+| 传的父界面 | 结果 |
+|---|---|
+| `null` | `NullPointerException: Cannot read field "minecraft" because "p_96806_" is null` |
+| 刚 `new` 出来的 `PauseScreen` | 还是 NPE，只是换了个位置：`Minecraft.getGpuWarnlistManager() because "p_96806_.minecraft" is null` |
+
+原因：**`Screen.minecraft` 字段是在 `Screen.init(Minecraft, w, h)` 里才赋值的**，
+而 `init` 由 `Minecraft.setScreen()` 调用。所以"非 null"不够，还得"已经被 setScreen 过"。
+
+正确做法（`GuiOps.openScreen`）：**先 `mc.setScreen(new PauseScreen(true))` 把父界面装上
+（这一步顺带完成 init），再拿 `mc.screen` 当父界面构造目标界面** ——
+跟真人从 ESC 进设置是完全同一条路。
+
+### N22. 滑块不能"设值"，只能按比例点坐标 ★
+
+`AbstractSliderButton.setValue(double)` 是 **private**（`AbstractSliderButton:119`）；
+它只认鼠标：`onClick(x)` → `setValueFromMouse(x)`（`:115`）→
+`setValue((x - (getX()+4)) / (width-8))`，而且**钳到 0..1**。
+
+所以要设成 0.9 就得点 `getX() + 4 + (width-8) * 0.9` 那个 x（y 取控件中线）。
+实测音效界面的 `Master Volume` 从 **90% → 50%**（改完再读界面控件文字，值真的变了）。
+
+复选框就简单：`Checkbox extends AbstractButton`，点中心即切换。
+
+### N23. `/gamerule` **不支持列出全部**，`GameRules` 也没有遍历入口 ★
+
+- 实测把 `/gamerule` 无参发出去，服务端回的是
+  **`Unknown or incomplete command`** —— 原版没有"列出所有规则"这个用法。
+- `GameRules` 类只有按键取值的 `getRule(Key)`（`GameRules:117`），**没有任何公开的遍历口**。
+- 想让代理"看全所有规则"只能自己攒名单：`client/GameRuleset.java` 里那 **45 个字段**
+  是照着 1.20.1 源码抄的（抄法：`grep -o "public static final GameRules.Key<[^>]*> RULE_[A-Z_0-9]*"`
+  然后一行一个 `add(GameRules.RULE_XXX)`）。**换版本要重抄。**
+- 好消息：**规则名不用手抄** —— `Key.getId()` 就是命令里用的那个名字，运行时取。
+- 取值也有坑：`GameRules.Value` 是 `Value<T extends Value<T>>` 这种自引用泛型，
+  **没有 `get()`**；公开的取值口是 **`serialize()`**（`GameRules:426`），
+  正好回的就是命令里那种字符串（`"true"` / `"3"`）。
+- 改规则走命令（服务端裁决），**客户端那份可能滞后** —— 原版只同步少部分规则给客户端，
+  要权威值就用命令查（结果在 `chatlog`）。
+
+### N24. 设置是持久化的，测试要注意幂等
+
+音效滑块拖过一次之后，值会写进 `options.txt`；下一轮再拖到**同一个值**就"没变化"，
+看起来像功能坏了。**测试要挑一个跟当前不同的目标值**（先读当前值，再反着挑）。
+—— 这跟前面 N8 的"状态跨跑累积"是同一类纪律。
+
+---
+
 ## 11. 证据来源
 
 - 反编译产物：`mod/build/moddev/artifacts/forge-1.20.1-47.4.10-sources.jar`

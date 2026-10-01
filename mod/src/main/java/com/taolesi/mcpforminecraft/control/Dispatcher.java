@@ -46,13 +46,13 @@ public final class Dispatcher {
             "pickItem", "drop", "stopBreak", "digStatus", "sleep", "wakeUp",
             "ride", "dismount", "respawn", "fly", "openInventory", "clientLevel",
             "trades", "trade", "advancements", "setWorld", "spawn", "kill", "nameTag",
-            "stats", "sounds", "bossBars",
+            "stats", "sounds", "bossBars", "cooldowns", "gamerule",
             // 朝向
             "look", "lookAt",
             // 世界改动
             "break", "place", "interact", "attack", "use", "selectSlot", "scroll",
             // 界面
-            "clickButton", "typeText", "clickSlot", "closeScreen",
+            "clickButton", "typeText", "clickSlot", "closeScreen", "setWidget", "openScreen",
             // 通信与截图
             "chat", "shot",
             // 按键层

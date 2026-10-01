@@ -933,6 +933,31 @@ TOOLS_SPEC = [
      {"type": "object", "properties": {}},
      lambda a: tool_obs("bossBars", {})),
 
+    # ---------------- 批次6：界面长尾与世界规则 ----------------
+    ("mc_set_widget", "设置滑块/复选框。滑块按比例算 x 点过去（原版 setValue 是私有的，只认鼠标）。",
+     {"type": "object", "properties": {
+         "label": {"type": "string", "description": "控件文字子串"},
+         "index": {"type": "integer", "description": "mc_screen 回的序号"},
+         "value": {"type": "number", "description": "滑块给 0..1；复选框给 true/false"}},
+      "required": []},
+     lambda a: tool_action("setWidget", {k: a[k] for k in ("label", "index", "value")
+                                         if k in a}, False)),
+    ("mc_cooldowns", "哪些物品正在冷却、还剩多少（弓/末影珍珠/盾/紫颂果…）。",
+     {"type": "object", "properties": {}},
+     lambda a: tool_obs("cooldowns", {})),
+    ("mc_open_screen", "直接打开某个原版界面（不用一层层点）。"
+                       "支持的：options/video/sound/language/stats/social/skin/mouse/controls。",
+     {"type": "object", "properties": {
+         "screen": {"type": "string", "description": "界面名，见工具描述"}},
+      "required": ["screen"]},
+     lambda a: tool_action("openScreen", {"screen": a["screen"]}, False)),
+    ("mc_gamerule", "游戏规则：不带参数列出全部、给 name 查询、name+value 修改。"
+                    "故意不硬编码规则表 —— 借原版 /gamerule 的输出，结果在 mc_chatlog 里。",
+     {"type": "object", "properties": {
+         "name": {"type": "string", "description": "规则名，如 doDaylightCycle"},
+         "value": {"type": "string", "description": "新值，如 false"}}},
+     lambda a: tool_action("gamerule", {k: a[k] for k in ("name", "value") if k in a}, False)),
+
     # ---------------- 工程 ----------------
     ("mc_build", "跑 gradle 构建（默认 build），只回错误行。",
      {"type": "object", "properties": {"target": {"type": "string"}}},

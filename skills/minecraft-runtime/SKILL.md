@@ -398,3 +398,73 @@ AutoHotkey、pyautogui、把窗口抢到前台再模拟按键、虚拟 HID 设�
   切生存挖一次立刻 1。**判据必须弄清"那个动作在哪个模式下才算数"。**
 - **首领条只能从渲染事件拿**（`BossHealthOverlay.events` 是包级私有），
   所以判据天然是"屏幕上真的显示过"。
+
+### [2026-10-02 00:08] 运行时修正
+
+**第六批 API 运行时核实**（`python tools/e2e_api5.py`，共 9 条）：回读核对 6，弱核对 1，失败 2。
+
+失败项：openScreen video、chatlog 里出现了规则清单
+- `openScreen`：没有按键入口的界面（视频/音效/统计）能直接构造并 setScreen。
+- `setWidget`：滑块只能『按比例算 x 点过去』——`AbstractSliderButton.setValue` 是私有的。
+- `gamerule`：借原版 `/gamerule` 的输出，不硬编码规则表；改完再查一次确认。
+- `cooldowns`：扔末影珍珠之后冷却列表里真的有它。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api5`。
+
+### [2026-10-02 00:11] 运行时修正
+
+**第六批 API 运行时核实**（`python tools/e2e_api5.py`，共 9 条）：回读核对 7，弱核对 1，失败 1。
+
+失败项：openScreen video
+- `openScreen`：没有按键入口的界面（视频/音效/统计）能直接构造并 setScreen。
+- `setWidget`：滑块只能『按比例算 x 点过去』——`AbstractSliderButton.setValue` 是私有的。
+- `gamerule`：借原版 `/gamerule` 的输出，不硬编码规则表；改完再查一次确认。
+- `cooldowns`：扔末影珍珠之后冷却列表里真的有它。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api5`。
+
+### [2026-10-02 00:13] 运行时修正
+
+**第六批 API 运行时核实**（`python tools/e2e_api5.py`，共 9 条）：回读核对 8，弱核对 0，失败 1。
+
+失败项：拖完之后滑块上显示的值真的变了（回读核对）
+- `openScreen`：没有按键入口的界面（视频/音效/统计）能直接构造并 setScreen。
+- `setWidget`：滑块只能『按比例算 x 点过去』——`AbstractSliderButton.setValue` 是私有的。
+- `gamerule`：借原版 `/gamerule` 的输出，不硬编码规则表；改完再查一次确认。
+- `cooldowns`：扔末影珍珠之后冷却列表里真的有它。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api5`。
+
+### [2026-10-02 00:14] 运行时修正
+
+**第六批 API 运行时核实**（`python tools/e2e_api5.py`，共 9 条）：回读核对 9，弱核对 0，失败 0。
+
+无失败项。
+- `openScreen`：没有按键入口的界面（视频/音效/统计）能直接构造并 setScreen。
+- `setWidget`：滑块只能『按比例算 x 点过去』——`AbstractSliderButton.setValue` 是私有的。
+- `gamerule`：借原版 `/gamerule` 的输出，不硬编码规则表；改完再查一次确认。
+- `cooldowns`：扔末影珍珠之后冷却列表里真的有它。
+- 原始记录：`measurements.jsonl` 的 `kind=e2e_api5`。
+
+### [2026-10-02 02:0x] 运行时修正：第六批（界面长尾 / 世界规则 / 冷却）
+
+**`python tools/e2e_api5.py`：9 条，回读核对 9 条，失败 0。**
+
+| # | 条目 | 回读证据 |
+|---|---|---|
+| K-video/sound/stats | `openScreen` | 三个界面都真的开出来了（视频 25 个控件 / 音效 14 个 / 统计 4 个） |
+| L1a | `setWidget` 拖滑块 | `Master Volume: 90% → 50%`（改完再读界面控件文字） |
+| M1 | `gamerule` 列全部 | 45 条，`doFireTick=true` |
+| M2 | `gamerule` 改一条 | 命令回话 `is now set to: false`，再查 `is currently set to: false` |
+| N2 | `cooldowns` | 扔末影珍珠之后冷却列表里有 `minecraft:ender_pearl` |
+
+**又挖出 4 条（SKILL 第 10 章 N21-N24）：**
+
+- **`openScreen` 的父界面必须"已经被 init 过"**：连踩两轮 NPE ——
+  传 `null` 不行，传一个刚 `new` 出来的 `PauseScreen` 也不行，
+  因为 `Screen.minecraft` 是在 `init()` 里赋值的，而 `init` 由 `setScreen` 调。
+  做法改成"先 setScreen 上暂停菜单，再拿 `mc.screen` 当父界面"。
+- **滑块不能设值，只能按比例点坐标**（`setValue` 是 private，`AbstractSliderButton:115-121`），
+  而且钳到 0..1。实测拖动生效。
+- **`/gamerule` 不支持列出全部**（实测回 `Unknown or incomplete command`），
+  `GameRules` 也没有遍历入口 → 攒了份 45 条的字段名单（抄自源码），
+  名字用 `Key.getId()` 运行时取；取值只能走 `serialize()`（`Value` 没有 `get()`）。
+- **设置是持久化的**：音效滑块拖过一次会写进 `options.txt`，
+  下一轮拖到同一个值就"没变化" —— 测试要挑跟当前不同的目标值。

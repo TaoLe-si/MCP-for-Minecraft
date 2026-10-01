@@ -73,6 +73,8 @@ public final class ClientOps {
                     case "stats" -> Senses.stats(mc, args, out);
                     case "sounds" -> out.complete(Senses.sounds(mc, args));
                     case "bossBars" -> out.complete(Senses.bossBars(mc, args));
+                    case "cooldowns" -> out.complete(Info.cooldowns(mc));
+                    case "gamerule" -> out.complete(WorldOps.gamerule(mc, args));
                     case "block" -> out.complete(Blocks.block(mc, args));
                     case "blocks" -> out.complete(Blocks.blocks(mc, args));
                     case "entities" -> out.complete(Blocks.entities(mc, args));
@@ -96,6 +98,8 @@ public final class ClientOps {
                     case "scroll" -> out.complete(Blocks.scroll(mc, args));
                     // ---- 界面 ----
                     case "clickButton" -> out.complete(GuiOps.clickButton(mc, args));
+                    case "setWidget" -> out.complete(GuiOps.setWidget(mc, args));
+                    case "openScreen" -> out.complete(GuiOps.openScreen(mc, args));
                     case "typeText" -> out.complete(GuiOps.typeText(mc, args));
                     case "clickSlot" -> out.complete(GuiOps.clickSlot(mc, args));
                     case "closeScreen" -> out.complete(GuiOps.closeScreen(mc));

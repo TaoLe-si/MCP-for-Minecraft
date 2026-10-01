@@ -199,6 +199,26 @@
 | N19 | 首领条只能从渲染事件拿（`BossHealthOverlay.events` 包级私有） | 判据天然变成"屏幕上真的显示过" |
 | N20 | 声音靠 `PlaySoundEvent` 抄流水 | 得到一条不依赖位置/返回值的独立证据链 |
 
+
+## P. 第六批：界面长尾 / 世界规则 / 物品冷却（已全部运行时核实）
+
+| # | 能力 | op | 实现 | 静态证据 | 运行时 | 状态 |
+|---|---|---|---|---|---|---|
+| P1 | 直接打开没有按键入口的界面 | `openScreen` | GuiOps | 这些界面构造函数只吃 `(Screen, Options)` | 视频/音效/统计都开出来了 | 已核 |
+| P2 | 拖滑块 / 勾复选框 | `setWidget` | GuiOps | `AbstractSliderButton.setValueFromMouse() :115`（setValue 是 private） | 音量 90%→50% | 已核 |
+| P3 | 列出全部游戏规则 | `gamerule` | WorldOps + GameRuleset | 45 个 `GameRules.Key` 字段抄自源码；`Value.serialize() :426` | 45 条 | 已核 |
+| P4 | 改一条游戏规则 | `gamerule{name,value}` | WorldOps | `/gamerule` 命令（服务端裁决） | false 改成功并回读 | 已核 |
+| P5 | 物品冷却列表 | `cooldowns` | Info | `Player.getCooldowns() :1949` `ItemCooldowns.isOnCooldown() :12` | 末影珍珠 | 已核 |
+
+第六批的 4 条规则（SKILL 第 10 章 N21-N24）：
+
+| # | 规则 | 后果 |
+|---|---|---|
+| N21 | `openScreen` 的父界面必须**已被 init**（`Screen.minecraft` 在 `init()` 里赋值） | null 不行、刚 new 的也不行，连踩两轮 NPE |
+| N22 | 滑块 `setValue` 是 private，只能按比例算 x 点坐标（且钳 0..1） | 想"设值"必须先算坐标 |
+| N23 | `/gamerule` 不支持列出全部；`GameRules` 无遍历入口；`Value` 没有 `get()` 只有 `serialize()` | 想列全只能自己攒 45 条名单 |
+| N24 | 设置持久化到 `options.txt`，测试要挑"跟当前不同"的值 | 否则"没变化"看着像坏了 |
+
 ## 未覆盖 / 明确不做（写在明处，别装作覆盖了）
 
 | 项 | 原因 |
@@ -212,7 +232,7 @@
 
 ## 覆盖统计
 
-- 已核（静+运）：**70** 条（其中 7 条是弱核对：只确认请求发出、结果由服务端裁决）
+- 已核（静+运）：**79** 条（其中 7 条是弱核对：只确认请求发出、结果由服务端裁决）
 - 已核静态（待运行时核实）：**0** 条
 - 未实现：**0** 条（本表登记的都在代码里了）
 
@@ -224,6 +244,9 @@
 
 第五批（统计 / 声音 / 首领条）：`python tools/e2e_api4.py` —— **6 条，
 6 条回读核对通过、0 失败**。原始记录见 `kind=e2e_api4`。
+
+第六批（界面长尾 / 世界规则 / 冷却）：`python tools/e2e_api5.py` —— **9 条，
+9 条回读核对通过、0 失败**。原始记录见 `kind=e2e_api5`。
 
 ### 第二轮挖出来的原版规则（详见 `skills/minecraft-api/SKILL.md` 第 10 章）
 
