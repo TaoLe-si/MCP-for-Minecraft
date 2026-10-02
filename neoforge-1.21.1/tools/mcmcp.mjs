@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_DIR = path.resolve(SERVER_DIR, '..');
-const MOD_DIR = PROJECT_DIR;
+const MOD_DIR = path.join(PROJECT_DIR, 'mod');
 const VALIDATION_DIR = path.join(PROJECT_DIR, '.validation');
 const VALIDATION_GAME_DIR = path.join(VALIDATION_DIR, 'game-dir');
 const VALIDATION_MODS_DIR = path.join(PROJECT_DIR, 'test-mods');
@@ -206,7 +206,9 @@ function processAlive(child) {
 async function platformGradleCommand(task, extraEnv = {}) {
   const wrapperName = process.platform === 'win32' ? 'gradlew.bat' : 'gradlew';
   const wrapperPath = path.join(MOD_DIR, wrapperName);
-  const args = ['--no-daemon', '--console=plain', task];
+  const runClientFlags = task === 'runClient' ? ['--no-configuration-cache'] : [];
+  const runClientFlagText = task === 'runClient' ? '--no-configuration-cache ' : '';
+  const args = ['--no-daemon', ...runClientFlags, '--console=plain', task];
   const env = {
     ...process.env,
     GRADLE_USER_HOME: process.env.MC_MCP_GRADLE_USER_HOME || path.join(VALIDATION_DIR, 'gradle-home'),
@@ -227,9 +229,9 @@ async function platformGradleCommand(task, extraEnv = {}) {
     if (process.platform === 'win32') {
       const relativeExecutable = path.relative(MOD_DIR, executable);
       if (!path.isAbsolute(relativeExecutable) && !relativeExecutable.startsWith(`..${path.sep}`)) {
-        return { command: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `${relativeExecutable} --no-daemon --console=plain ${task}`], options: { cwd: MOD_DIR, env } };
+        return { command: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `${relativeExecutable} --no-daemon ${runClientFlagText}--console=plain ${task}`], options: { cwd: MOD_DIR, env } };
       }
-      const command = `& '${executable.replace(/'/g, "''")}' --no-daemon --console=plain ${task}`;
+      const command = `& '${executable.replace(/'/g, "''")}' --no-daemon ${runClientFlagText}--console=plain ${task}`;
       return { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', command], options: { cwd: MOD_DIR, env } };
     }
     return { command: executable, args, options: { cwd: MOD_DIR, env } };
@@ -238,7 +240,7 @@ async function platformGradleCommand(task, extraEnv = {}) {
   try {
     await access(wrapperPath);
     return process.platform === 'win32'
-      ? { command: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `${wrapperName} --no-daemon --console=plain ${task}`], options: { cwd: MOD_DIR, env } }
+      ? { command: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `${wrapperName} --no-daemon ${runClientFlagText}--console=plain ${task}`], options: { cwd: MOD_DIR, env } }
       : { command: wrapperPath, args, options: { cwd: MOD_DIR, env } };
   } catch {
     return fallbackGradle(task, env);
@@ -246,9 +248,11 @@ async function platformGradleCommand(task, extraEnv = {}) {
 }
 
 function fallbackGradle(task, env) {
-  const args = ['--no-daemon', '--console=plain', task];
+  const runClientFlags = task === 'runClient' ? ['--no-configuration-cache'] : [];
+  const runClientFlagText = task === 'runClient' ? '--no-configuration-cache ' : '';
+  const args = ['--no-daemon', ...runClientFlags, '--console=plain', task];
   return process.platform === 'win32'
-    ? { command: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `gradle --no-daemon --console=plain ${task}`], options: { cwd: MOD_DIR, env } }
+    ? { command: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `gradle --no-daemon ${runClientFlagText}--console=plain ${task}`], options: { cwd: MOD_DIR, env } }
     : { command: 'gradle', args, options: { cwd: MOD_DIR, env } };
 }
 
@@ -420,7 +424,7 @@ async function prepareInstalledProfile(profile) {
     }, null, 2), 'utf8');
   }
 
-  const buildDir = path.join(PROJECT_DIR, 'build', 'libs');
+  const buildDir = path.join(MOD_DIR, 'build', 'libs');
   const bridgeJar = (await readdir(buildDir)).filter((name) => name.endsWith('.jar')
     && !name.endsWith('-sources.jar') && !name.endsWith('-javadoc.jar'))
     .sort().at(-1);
@@ -562,9 +566,13 @@ async function probeBridge(currentSession, timeoutMs = 1500) {
       headers: { Authorization: `Bearer ${currentSession.token}` },
       signal: abort.signal,
     });
+    currentSession.lastProbeStatus = response.status;
+    currentSession.lastProbeError = null;
     if (!response.ok) return null;
     return await response.json();
-  } catch {
+  } catch (error) {
+    currentSession.lastProbeStatus = null;
+    currentSession.lastProbeError = error.cause?.code ?? error.name ?? 'unknown';
     return null;
   } finally {
     clearTimeout(timeout);
@@ -616,11 +624,14 @@ async function startClient(args) {
 
   const port = await reserveLoopbackPort();
   const token = randomBytes(32).toString('hex');
+  const defaultWorldName = `mcmcp-validation-${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`;
   recentProcessOutput = '';
   const bridgeEnv = {
     MC_MCP_HOST: '127.0.0.1',
     MC_MCP_PORT: String(port),
     MC_MCP_TOKEN: token,
+    MC_MCP_AUTOWORLD: 'true',
+    MC_MCP_WORLD_NAME: defaultWorldName,
   };
   const configuredProfile = installedProfileFromEnvironment();
   let launch;
@@ -634,7 +645,7 @@ async function startClient(args) {
       gameDir: path.join(MOD_DIR, 'run', 'client'),
       mode: 'neoforge-runClient',
       versionId: null,
-      worldName: null,
+      worldName: defaultWorldName,
     };
     child = await launchProcess('runClient', bridgeEnv);
   }
@@ -655,7 +666,7 @@ async function startClient(args) {
     health = await probeBridge(session, 900);
     const bridgeReady = Boolean(health?.ready);
     const worldReady = Boolean(health?.inWorld && health?.localIntegratedServer);
-    if (bridgeReady && (!configuredProfile || worldReady)) {
+    if (bridgeReady && worldReady) {
       return {
         started: true,
         ready: true,
@@ -685,6 +696,9 @@ async function startClient(args) {
     gameDir: path.relative(PROJECT_DIR, session.gameDir),
     timeoutSeconds: Math.round(timeoutMs / 1000),
     message: '客户端仍在运行，但 MCP 桥接或隔离测试世界尚未就绪。',
+    bridge: health,
+    bridgeProbeStatus: session.lastProbeStatus,
+    bridgeProbeError: session.lastProbeError,
     recentOutput: tail,
   };
 }
@@ -864,6 +878,8 @@ async function callTool(name, args) {
         worldName: session?.worldName ?? null,
         gameDir: session?.gameDir ? path.relative(PROJECT_DIR, session.gameDir) : null,
         bridge: session ? await probeBridge(session) : null,
+        bridgeProbeStatus: session?.lastProbeStatus ?? null,
+        bridgeProbeError: session?.lastProbeError ?? null,
       });
     }
     case 'mc_client_logs': return toolResult(await clientLogs(args));

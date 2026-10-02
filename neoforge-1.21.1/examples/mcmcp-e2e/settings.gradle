@@ -5,4 +5,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'mcmcp-e2e-testmod'
+rootProject.name = 'mcpforminecraft-e2e'

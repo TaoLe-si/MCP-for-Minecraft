@@ -10,12 +10,8 @@ base.archivesName = mod_id
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-sourceSets {
-    main {
-        java.srcDir('src/java')
-        resources.srcDir('src/resources')
-    }
-}
+def gameTestNamespaces = providers.gradleProperty('mcmcp.gametestNamespaces')
+        .getOrElse("minecraft,${mod_id}")
 
 sourceSets.main.resources {
     srcDir('src/generated/resources')
@@ -30,8 +26,11 @@ runs {
     }
     client {
         systemProperty 'neoforge.enableGameTest', 'true'
+        systemProperty 'neoforge.enabledGameTestNamespaces', gameTestNamespaces
     }
     gameTestServer {
+        systemProperty 'neoforge.enableGameTest', 'true'
+        systemProperty 'neoforge.enabledGameTestNamespaces', gameTestNamespaces
     }
 }
 
@@ -42,6 +41,7 @@ configurations {
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
     localRuntime fileTree(dir: 'libs', include: ['*.jar'])
+    localRuntime fileTree(dir: '../test-mods', include: ['*.jar'])
 }
 
 tasks.withType(ProcessResources).configureEach {

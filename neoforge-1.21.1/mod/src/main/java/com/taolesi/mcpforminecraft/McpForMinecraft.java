@@ -1,4 +1,7 @@
-package dev.codex.mcmcp;
+package com.taolesi.mcpforminecraft;
+
+import com.taolesi.mcpforminecraft.client.PlayerControls;
+import com.taolesi.mcpforminecraft.control.ControlServer;
 
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
@@ -8,19 +11,19 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
-@Mod(value = MinecraftMcpBridge.MOD_ID, dist = Dist.CLIENT)
-public final class MinecraftMcpBridge {
+@Mod(value = McpForMinecraft.MOD_ID, dist = Dist.CLIENT)
+public final class McpForMinecraft {
     public static final String MOD_ID = "mcmcp";
 
-    public MinecraftMcpBridge(IEventBus modEventBus, ModContainer modContainer) {
+    public McpForMinecraft(IEventBus modEventBus, ModContainer modContainer) {
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
-        modEventBus.addListener(BridgeHttpServer::onClientSetup);
-        Runtime.getRuntime().addShutdownHook(new Thread(BridgeHttpServer::stop, "mcmcp-shutdown"));
+        modEventBus.addListener(ControlServer::onClientSetup);
+        Runtime.getRuntime().addShutdownHook(new Thread(ControlServer::stop, "mcmcp-shutdown"));
     }
 
     private void onClientTick(ClientTickEvent.Post event) {
         Minecraft client = Minecraft.getInstance();
         PlayerControls.onClientTick(client);
-        BridgeHttpServer.maybeCreateValidationWorld(client);
+        ControlServer.maybeCreateValidationWorld(client);
     }
 }

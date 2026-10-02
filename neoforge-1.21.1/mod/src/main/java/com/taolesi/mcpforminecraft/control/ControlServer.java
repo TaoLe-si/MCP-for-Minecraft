@@ -1,4 +1,7 @@
-package dev.codex.mcmcp;
+package com.taolesi.mcpforminecraft.control;
+
+import com.taolesi.mcpforminecraft.McpForMinecraft;
+import com.taolesi.mcpforminecraft.client.PlayerControls;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -55,8 +58,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class BridgeHttpServer {
-    private static final Logger LOGGER = LoggerFactory.getLogger("MinecraftMcpBridge");
+public final class ControlServer {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ControlServer.class);
     private static final Gson GSON = new Gson();
     private static final int MAX_BODY_BYTES = 1_048_576;
     private static final Pattern TEST_ID = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
@@ -64,10 +67,10 @@ final class BridgeHttpServer {
     private static volatile String token;
     private static boolean autoWorldAttempted;
 
-    private BridgeHttpServer() { }
+    private ControlServer() { }
 
-    static void onClientSetup(FMLClientSetupEvent event) {
-        event.enqueueWork(BridgeHttpServer::startFromEnvironment);
+    public static void onClientSetup(FMLClientSetupEvent event) {
+        event.enqueueWork(ControlServer::startFromEnvironment);
     }
 
     private static synchronized void startFromEnvironment() {
@@ -89,8 +92,8 @@ final class BridgeHttpServer {
                 thread.setDaemon(true);
                 return thread;
             }));
-            localServer.createContext("/health", BridgeHttpServer::handleHealth);
-            localServer.createContext("/rpc", BridgeHttpServer::handleRpc);
+            localServer.createContext("/health", ControlServer::handleHealth);
+            localServer.createContext("/rpc", ControlServer::handleRpc);
             localServer.start();
             server = localServer;
             LOGGER.info("Local MCP bridge listening on 127.0.0.1:{}", port);
@@ -99,7 +102,7 @@ final class BridgeHttpServer {
         }
     }
 
-    static void maybeCreateValidationWorld(Minecraft client) {
+    public static void maybeCreateValidationWorld(Minecraft client) {
         if (!"true".equalsIgnoreCase(System.getenv("MC_MCP_AUTOWORLD"))) return;
         if (client.options.pauseOnLostFocus) {
             client.options.pauseOnLostFocus = false;
@@ -133,7 +136,7 @@ final class BridgeHttpServer {
         }
     }
 
-    static synchronized void stop() {
+    public static synchronized void stop() {
         HttpServer current = server;
         server = null;
         if (current != null) current.stop(0);
@@ -151,7 +154,7 @@ final class BridgeHttpServer {
         Minecraft client = Minecraft.getInstance();
         JsonObject health = new JsonObject();
         health.addProperty("ready", true);
-        health.addProperty("modId", MinecraftMcpBridge.MOD_ID);
+        health.addProperty("modId", McpForMinecraft.MOD_ID);
         health.addProperty("minecraftVersion", SharedConstants.getCurrentVersion().getName());
         health.addProperty("inWorld", client.player != null && client.level != null);
         health.addProperty("localIntegratedServer", client.isLocalServer());
@@ -225,7 +228,7 @@ final class BridgeHttpServer {
     private static JsonObject runtimeInfo(Minecraft client) {
         JsonObject result = new JsonObject();
         result.addProperty("minecraftVersion", SharedConstants.getCurrentVersion().getName());
-        result.addProperty("modId", MinecraftMcpBridge.MOD_ID);
+        result.addProperty("modId", McpForMinecraft.MOD_ID);
         result.addProperty("inWorld", client.player != null && client.level != null);
         result.addProperty("localIntegratedServer", client.isLocalServer());
         if (client.level != null) result.addProperty("dimension", client.level.dimension().location().toString());
@@ -515,7 +518,7 @@ final class BridgeHttpServer {
                 player.getBoundingBox().inflate(radius), entity -> entity != player);
         JsonArray entities = new JsonArray();
         nearby.stream().sorted(Comparator.comparingDouble(player::distanceToSqr)).limit(limit)
-                .map(BridgeHttpServer::entityInfo).forEach(entities::add);
+                .map(ControlServer::entityInfo).forEach(entities::add);
         JsonObject result = new JsonObject();
         result.addProperty("dimension", client.level.dimension().location().toString());
         result.addProperty("radius", radius);
@@ -564,7 +567,7 @@ final class BridgeHttpServer {
         String selector = optionalString(args, "selector", "all");
         var registeredTests = GameTestRegistry.getAllTestFunctions();
         JsonArray testIds = new JsonArray();
-        registeredTests.stream().map(test -> test.testName()).sorted().forEach(testIds::add);
+        registeredTests.stream().map(ControlServer::gameTestId).sorted().forEach(testIds::add);
         if ("list".equals(selector)) {
             JsonObject result = new JsonObject();
             result.addProperty("accepted", true);
@@ -591,9 +594,11 @@ final class BridgeHttpServer {
             command = "test runall";
         } else {
             if (!TEST_ID.matcher(selector).matches()) throw new IllegalArgumentException("selector must be all or a namespaced GameTest id.");
-            boolean registered = registeredTests.stream().anyMatch(test -> selector.equals(test.testName()));
-            if (!registered) throw new IllegalArgumentException("No GameTest is registered with that ID.");
-            command = "test run " + selector;
+            var selectedTest = registeredTests.stream()
+                    .filter(test -> selector.equals(gameTestId(test)))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("No GameTest is registered with that ID."));
+            command = "test run " + selectedTest.testName();
         }
         runLocalCommand(client, command);
         JsonObject result = new JsonObject();
@@ -603,6 +608,10 @@ final class BridgeHttpServer {
         result.add("registeredTestIds", testIds);
         result.addProperty("note", "Read game logs for per-test completion and failure details.");
         return result;
+    }
+
+    private static String gameTestId(net.minecraft.gametest.framework.TestFunction test) {
+        return ResourceLocation.parse(test.structureName()).getNamespace() + ":" + test.testName();
     }
 
     private static void runLocalCommand(Minecraft client, String command) {

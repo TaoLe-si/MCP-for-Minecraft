@@ -1,4 +1,4 @@
-package dev.codex.mcmcp.e2e;
+package com.taolesi.mcpforminecraft.e2e;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -15,7 +15,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class ProbeGameTests {
     private ProbeGameTests() { }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft", timeoutTicks = 20)
+    @GameTest(template = "empty", templateNamespace = McmcpE2E.MOD_ID, timeoutTicks = 20)
     public static void probeWandTogglesProbeBlock(GameTestHelper helper) {
         BlockPos pos = new BlockPos(1, 1, 1);
         helper.setBlock(pos, E2EContent.PROBE_BLOCK.get());

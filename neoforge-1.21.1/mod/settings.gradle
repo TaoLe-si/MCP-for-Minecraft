@@ -5,4 +5,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'minecraft-mcp-bridge'
+rootProject.name = 'mcpforminecraft-neoforge-1.21.1'

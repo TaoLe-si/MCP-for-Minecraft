@@ -1,4 +1,4 @@
-package dev.codex.mcmcp.e2e;
+package com.taolesi.mcpforminecraft.e2e;
 
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;

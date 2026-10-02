@@ -1,24 +1,25 @@
-package dev.codex.mcmcp;
+package com.taolesi.mcpforminecraft.client;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.ToggleKeyMapping;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 
-final class PlayerControls {
-    static final int MAX_HOLD_TICKS = 200;
+public final class PlayerControls {
+    public static final int MAX_HOLD_TICKS = 200;
     private static final Map<String, Integer> HELD = new LinkedHashMap<>();
 
     private PlayerControls() { }
 
-    static void hold(Minecraft client, String control, int ticks) {
+    public static void hold(Minecraft client, String control, int ticks) {
         KeyMapping mapping = mapping(client, control);
         if (mapping == null) throw new IllegalArgumentException("Unknown control: " + control);
         if ("inventory".equals(control)) {
             HELD.remove(control);
-            mapping.setDown(false);
+            force(mapping, false);
             if (client.screen instanceof InventoryScreen) {
                 client.setScreen(null);
             } else {
@@ -31,7 +32,7 @@ final class PlayerControls {
         if (consumesClick(control)) {
             KeyMapping.click(InputConstants.getKey(mapping.saveString()));
         }
-        mapping.setDown(true);
+        force(mapping, true);
     }
 
     private static boolean consumesClick(String control) {
@@ -41,25 +42,35 @@ final class PlayerControls {
         };
     }
 
-    static void releaseAll(Minecraft client) {
+    public static void releaseAll(Minecraft client) {
         for (String control : HELD.keySet()) {
             KeyMapping mapping = mapping(client, control);
-            if (mapping != null) mapping.setDown(false);
+            if (mapping != null) force(mapping, false);
         }
         HELD.clear();
     }
 
-    static void onClientTick(Minecraft client) {
+    public static void onClientTick(Minecraft client) {
         if (HELD.isEmpty()) return;
         for (Map.Entry<String, Integer> entry : HELD.entrySet()) {
+            KeyMapping mapping = mapping(client, entry.getKey());
+            if (mapping != null) force(mapping, true);
             int remaining = entry.getValue() - 1;
             entry.setValue(remaining);
             if (remaining <= 0) {
-                KeyMapping mapping = mapping(client, entry.getKey());
-                if (mapping != null) mapping.setDown(false);
+                if (mapping != null) force(mapping, false);
             }
         }
         HELD.values().removeIf(ticks -> ticks <= 0);
+    }
+
+    /** Toggle mappings ignore setDown(false) and invert on setDown(true). */
+    private static void force(KeyMapping mapping, boolean wanted) {
+        if (mapping instanceof ToggleKeyMapping) {
+            if (mapping.isDown() != wanted) mapping.setDown(true);
+        } else {
+            mapping.setDown(wanted);
+        }
     }
 
     private static KeyMapping mapping(Minecraft client, String name) {

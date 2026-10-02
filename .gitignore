@@ -2,7 +2,7 @@
 .gradle/
 build/
 !mod/gradle/wrapper/gradle-wrapper.jar
-!neoforge-1.21.1/gradle/wrapper/gradle-wrapper.jar
+!neoforge-1.21.1/mod/gradle/wrapper/gradle-wrapper.jar
 .validation/
 neoforge-1.21.1/test-mods/*.jar
 out/
