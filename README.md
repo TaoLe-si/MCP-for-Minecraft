@@ -1,5 +1,8 @@
 # MCP for Minecraft
 
+This repository also contains a separate NeoForge 1.21.1 bridge at
+[neoforge-1.21.1](neoforge-1.21.1/README.md). The original Forge 1.20.1 project and its history remain intact.
+
 让 AI 代理**真的去玩** Minecraft 的一套东西：一个 Forge 模组在游戏里开一条本地控制
 通道（动态服务），一个 MCP 服务把"往前走 / 挖方块 / 点按钮 / 读日志"这些动作
 变成代理能调的工具。

@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "active=false": { "model": "mcmcp_e2e:block/probe_block" },
+    "active=true": { "model": "mcmcp_e2e:block/probe_block" }
+  }
+}
